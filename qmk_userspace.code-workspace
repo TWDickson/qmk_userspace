@@ -1,0 +1,19 @@
+{
+	"folders": [
+		{
+			"name": "userspace",
+			"path": "."
+		},
+		{
+			"name": "qmk_firmware",
+			"path": "/Users/taylordickson/Projects/qmk_firmware_TWDickson"
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"*.c": "c",
+			"*.h": "c",
+			"*.inc": "c"
+		}
+	}
+}

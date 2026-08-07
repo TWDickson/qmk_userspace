@@ -53,6 +53,19 @@ The previous version of this keymap hand-rolled all of the above as a ~450 line
 `timeout_fade.c` with its own `transaction_rpc_send` running every 100 ms, a
 retry counter and a watchdog. All of it is now core QMK config.
 
+## USB identity
+
+`SERIAL_NUMBER` is pinned to a fixed string. Without it QMK derives the USB
+serial from the MCU's unique flash ID, so the two halves present as different
+devices and macOS re-asks "Allow accessory to connect" whenever the cable moves
+to the other half. See `config.h` for the full reasoning.
+
+## clangd
+
+```console
+$ cd /path/to/qmk_firmware && qmk generate-compilation-database -kb boardsource/lulu/rp2040 -km twdickson
+```
+
 ## Notes to self
 
 - `CONSOLE_ENABLE` adds a HID interface and turns every `uprintf` into a USB

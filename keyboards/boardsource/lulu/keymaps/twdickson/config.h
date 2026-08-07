@@ -52,5 +52,19 @@
 #define RGB_MATRIX_SAT_STEP 8
 #define RGB_MATRIX_VAL_STEP 8
 
+/* ── USB identity ─────────────────────────────────────────────────────────
+ * On ChibiOS, SERIAL_NUMBER_USE_HARDWARE_ID defaults to TRUE, so the USB
+ * serial is derived from the MCU's unique flash ID. The two halves have
+ * different IDs, which means moving the cable to the other half presents a
+ * different device — and macOS's "Allow accessories to connect" tracks
+ * approvals per device, so it asks again.
+ *
+ * A fixed string makes the identity stable no matter which half is plugged in
+ * or whether a controller ever gets replaced. Only the master enumerates over
+ * USB, so both halves sharing a serial is not a conflict. Expect one final
+ * approval prompt after first flashing this.
+ */
+#define SERIAL_NUMBER "TWDickson-Lulu"
+
 /* ── VIA ──────────────────────────────────────────────────────────────── */
 #define DYNAMIC_KEYMAP_LAYER_COUNT 5 // QWERTY, GAME, LOWER, RAISE, ADJUST
