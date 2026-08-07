@@ -66,5 +66,29 @@
  */
 #define SERIAL_NUMBER "TWDickson-Lulu"
 
-/* ── VIA ──────────────────────────────────────────────────────────────── */
-#define DYNAMIC_KEYMAP_LAYER_COUNT 5 // QWERTY, GAME, LOWER, RAISE, ADJUST
+/* ── Tap-hold ─────────────────────────────────────────────────────────────
+ * The pinky shifts are mod-taps. On stock settings a fast roll into one can
+ * settle as a tap and emit a bracket where a capital was meant.
+ *
+ * PERMISSIVE_HOLD settles a mod-tap as held as soon as another key is pressed
+ * *and released* inside it — which is the exact shape of a capital: shift
+ * down, letter down, letter up, shift up. Rolling out of the shift before the
+ * next key still taps, so typing a bracket is unaffected.
+ *
+ * QUICK_TAP_TERM 0 stops a tap-then-hold from auto-repeating the tap keycode,
+ * so typing "[" and immediately reaching for shift gives shift, not "[[[[".
+ *
+ * SPECULATIVE_HOLD applies the modifier on keydown instead of waiting for the
+ * decision, retracting it if the key turns out to be a tap. It defaults to
+ * Shift and Ctrl mod-taps, which is exactly what this keymap has, and it is
+ * what stops shift-click feeling laggy.
+ *
+ * CHORDAL_HOLD is deliberately NOT set. It settles same-hand chords as taps,
+ * which is right for home row mods and wrong here — shifting a same-hand
+ * letter (Shift+Q, Shift+A, Shift+Z) is entirely normal on a pinky shift, and
+ * would come out as "[q" instead of "Q".
+ */
+#define TAPPING_TERM 200 // the stock default; stated because it is the first knob to turn
+#define PERMISSIVE_HOLD
+#define QUICK_TAP_TERM 0
+#define SPECULATIVE_HOLD
