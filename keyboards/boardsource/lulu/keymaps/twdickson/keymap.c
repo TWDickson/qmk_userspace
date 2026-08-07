@@ -32,25 +32,36 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
                                    KC_LGUI, KC_LALT,   LOWER,  KC_SPC,   KC_ENT,   RAISE,   KC_BSPC, KC_RGUI
 ),
 
-/* GAME - plain shifts and no GUI, so held keys and Windows key misfires stay out of the way
+/* GAME - overrides only; everything else falls through to _QWERTY.
+ *
+ * layer_switch_get_layer() walks layer_state | default_layer_state from the top
+ * down and falls back to layer 0 when every active layer is transparent, so a
+ * transparent key here resolves against _QWERTY even though _GAME is the active
+ * *default* layer and layer 0's bit is not set. That means this layer only has
+ * to state what it changes, and edits to _QWERTY carry over automatically.
+ *
+ * The three changes: plain shifts instead of mod-taps, so a held shift never
+ * decides it was a tap and emits a bracket mid-fight; and no left GUI, so the
+ * desktop never gets yanked away.
+ *
  * ,-----------------------------------------.                    ,-----------------------------------------.
- * | GESC |   1  |   2  |   3  |   4  |   5  |                    |   6  |   7  |   8  |   9  |   0  |  -   |
+ * |      |      |      |      |      |      |                    |      |      |      |      |      |      |
  * |------+------+------+------+------+------|                    |------+------+------+------+------+------|
- * | Tab  |   Q  |   W  |   E  |   R  |   T  |                    |   Y  |   U  |   I  |   O  |   P  |  =   |
+ * |      |      |      |      |      |      |                    |      |      |      |      |      |      |
  * |------+------+------+------+------+------|                    |------+------+------+------+------+------|
- * |LCTRL |   A  |   S  |   D  |   F  |   G  |-------.    ,-------|   H  |   J  |   K  |   L  |   ;  |  '   |
- * |------+------+------+------+------+------|   [   |    | Play  |------+------+------+------+------+------|
- * |LShift|   Z  |   X  |   C  |   V  |   B  |-------|    |-------|   N  |   M  |   ,  |   .  |   /  |RShift|
+ * |      |      |      |      |      |      |-------.    ,-------|      |      |      |      |      |      |
+ * |------+------+------+------+------+------|       |    |       |------+------+------+------+------+------|
+ * |LShift|      |      |      |      |      |-------|    |-------|      |      |      |      |      |RShift|
  * `-----------------------------------------/       /     \      \-----------------------------------------'
- *                   |  NO  | LALT |LOWER | /Space  /       \Enter \  |RAISE |BackSP| RGUI |
+ *                   |  NO  |      |      | /       /       \      \  |      |      |      |
  *                   `----------------------------'           '------''--------------------'
  */
 [_GAME] = LAYOUT(
-  QK_GESC,  KC_1,    KC_2,    KC_3,    KC_4,    KC_5,                      KC_6,    KC_7,    KC_8,    KC_9,    KC_0,    KC_MINS,
-  KC_TAB,   KC_Q,    KC_W,    KC_E,    KC_R,    KC_T,                      KC_Y,    KC_U,    KC_I,    KC_O,    KC_P,    KC_EQL,
-  KC_LCTL,  KC_A,    KC_S,    KC_D,    KC_F,    KC_G,                      KC_H,    KC_J,    KC_K,    KC_L,    KC_SCLN, KC_QUOT,
-  KC_LSFT,  KC_Z,    KC_X,    KC_C,    KC_V,    KC_B, KC_LBRC,   KC_MPLY,  KC_N,    KC_M,    KC_COMM, KC_DOT,  KC_SLSH, KC_RSFT,
-                            KC_NO, KC_LALT,   LOWER,  KC_SPC,   KC_ENT,   RAISE,   KC_BSPC, KC_RGUI
+  _______, _______, _______, _______, _______, _______,                     _______, _______, _______, _______, _______, _______,
+  _______, _______, _______, _______, _______, _______,                     _______, _______, _______, _______, _______, _______,
+  _______, _______, _______, _______, _______, _______,                     _______, _______, _______, _______, _______, _______,
+  KC_LSFT, _______, _______, _______, _______, _______, _______,   _______, _______, _______, _______, _______, _______, KC_RSFT,
+                             KC_NO,   _______, _______, _______,   _______, _______, _______, _______
 ),
 
 /* LOWER
