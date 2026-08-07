@@ -6,8 +6,8 @@
 /* ── Split link ────────────────────────────────────────────────────────────
  * Only what each half actually renders. SPLIT_ACTIVITY_ENABLE is the load
  * bearing one: it keeps last_input_activity_elapsed() in step across the
- * link, which is what makes RGB_MATRIX_TIMEOUT and OLED_TIMEOUT fire together
- * on both halves without any custom transaction.
+ * link, which is what makes the RGB and OLED timeouts fire together on both
+ * halves without any custom transaction.
  *
  * SPLIT_TRANSPORT_MIRROR is deliberately absent — nothing on the secondary
  * half needs to see the master's key events, and mirroring the matrix costs
@@ -19,13 +19,22 @@
 #define SPLIT_WATCHDOG_ENABLE    // reboot a half that comes up without a link
 
 /* ── Idle behaviour ───────────────────────────────────────────────────────
- * The RGB ramp-down that runs ahead of RGB_MATRIX_TIMEOUT lives in keymap.c.
- * The OLED fade is OLED_FADE_OUT, which is done by the SSD1306 itself.
+ * One idle threshold drives both the lighting and the panel. The RGB
+ * ramp-down that runs ahead of the cutoff lives in keymap.c; the OLED fade is
+ * OLED_FADE_OUT, performed by the SSD1306 itself.
+ *
+ * The driver's own OLED_TIMEOUT is deliberately off. It restarts on every
+ * oled_on() call, so waking the panel from the idle clock would also push its
+ * next sleep out by a further OLED_TIMEOUT — the display would outlast the
+ * lighting by a full minute. oled_task_user() turns the panel off explicitly
+ * instead, from the same clock RGB_MATRIX_TIMEOUT uses.
  */
-#define RGB_MATRIX_TIMEOUT 60000
+#define IDLE_TIMEOUT_MS 60000
+
+#define RGB_MATRIX_TIMEOUT IDLE_TIMEOUT_MS
 #define RGB_MATRIX_SLEEP // drop the lighting when the host suspends
 
-#define OLED_TIMEOUT 60000
+#define OLED_TIMEOUT 0
 #define OLED_FADE_OUT
 #define OLED_FADE_OUT_INTERVAL 8 // 0-15, larger is slower
 

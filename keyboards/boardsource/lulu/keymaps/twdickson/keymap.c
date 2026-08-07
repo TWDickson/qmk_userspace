@@ -220,15 +220,19 @@ void housekeeping_task_user(void) {
 
 #ifdef OLED_ENABLE
 bool oled_task_user(void) {
-    /* OLED_TIMEOUT only restarts when something calls oled_on(). Tying that to
-     * real input rather than to the panel redrawing itself is what lets it
-     * sleep at all, and SPLIT_ACTIVITY_ENABLE means both halves agree on when
-     * that is. The fade itself is OLED_FADE_OUT, done in the display
-     * controller, so no per-step brightness writes go over the link.
+    /* Driven off the same idle clock as the lighting, so the panel and the LEDs
+     * sleep together. SPLIT_ACTIVITY_ENABLE means both halves agree on what
+     * that clock reads, and the fade out is OLED_FADE_OUT — done inside the
+     * display controller, so no per-step brightness writes cross the link.
+     *
+     * Both calls are cheap to repeat: each only emits I2C on a state change.
      */
-    if (last_input_activity_elapsed() < OLED_TIMEOUT) {
-        oled_on();
+    if (last_input_activity_elapsed() >= IDLE_TIMEOUT_MS) {
+        oled_off();
+        return false; // nothing worth drawing into a panel that is asleep
     }
+
+    oled_on();
     oled_render_animation();
     return false;
 }
