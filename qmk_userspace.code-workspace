@@ -6,7 +6,7 @@
 		},
 		{
 			"name": "qmk_firmware",
-			"path": "/Users/taylordickson/Projects/qmk_firmware_TWDickson"
+			"path": "../Projects/qmk_firmware_TWDickson"
 		}
 	],
 	"settings": {

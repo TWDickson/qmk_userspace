@@ -6,10 +6,14 @@ Userspace**: it holds only the keymap and builds against an unmodified upstream
 
 ## Two repositories
 
-| path | role |
-|---|---|
-| `~/qmk_userspace` | this repo — the keymap, the only thing that gets edited |
-| `~/Projects/qmk_firmware_TWDickson` | QMK checkout, branch `modernize-2026`, **tracks upstream unmodified** |
+| repo | role |
+| --- | --- |
+| this one | the keymap — the only thing that gets edited |
+| the QMK checkout | branch `modernize-2026`, **tracks upstream unmodified** |
+
+`qmk config user.qmk_home` is the authoritative location of the QMK checkout;
+`user.overlay_dir` points back here. The `.code-workspace` file assumes the two
+sit as siblings under `~` and `~/Projects`, so adjust it if that changes.
 
 The firmware checkout used to be a fork with the keymap committed inside it,
 which is what made it impossible to update. Keep it clean — if a change seems to
