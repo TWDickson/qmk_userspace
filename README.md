@@ -7,8 +7,13 @@ holds only the keymap and builds against an unmodified upstream `qmk_firmware`,
 so pulling a new QMK release is just `git pull` in the firmware checkout.
 
 **[Design notes](NOTES.md)** — the reasoning, the corrections and the traps.
-**[Theme preview](docs/theme-preview.html)** — open in a browser to see every
-theme drawn on the board's real LED map.
+
+**[Theme preview](docs/theme-preview.html)** — every theme drawn on the board's
+real LED map, with live hue/speed sliders. Self-contained: open the file, no
+network or account needed. Also hosted at
+[claude.ai/code/artifact/bf5a7015…](https://claude.ai/code/artifact/bf5a7015-7957-434d-be30-7cb2169511d4)
+([redirect](docs/theme-preview-hosted.html)), though that copy is a private
+artifact and only opens for Taylor's account.
 
 ---
 
