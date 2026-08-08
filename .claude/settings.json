@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "permissions": {
+    "allow": [
+      "Bash(make *)",
+      "Bash(qmk compile *)",
+      "Bash(qmk userspace-compile *)",
+      "Bash(qmk userspace-doctor *)",
+      "Bash(qmk userspace-list *)",
+      "Bash(qmk userspace-add *)",
+      "Bash(qmk doctor *)",
+      "Bash(qmk info *)",
+      "Bash(qmk lint *)",
+      "Bash(qmk generate-compilation-database *)",
+      "Bash(arm-none-eabi-size *)",
+      "Bash(arm-none-eabi-nm *)",
+      "Bash(arm-none-eabi-objdump *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git show *)",
+      "Bash(git branch *)",
+      "Bash(git ls-tree *)",
+      "Bash(git merge-base *)",
+      "Read"
+    ],
+    "ask": [
+      "Bash(qmk flash *)"
+    ]
+  }
+}
