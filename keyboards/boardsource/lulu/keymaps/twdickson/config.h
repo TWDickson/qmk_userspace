@@ -66,6 +66,26 @@
  */
 #define SERIAL_NUMBER "TWDickson-Lulu"
 
+/* ── Grave / Escape ───────────────────────────────────────────────────────
+ * QK_GESC sends grave whenever Shift or GUI is held, and it leaves that
+ * modifier applied. That is what gives "~" on Shift, but it also swallows the
+ * two shortcuts that reach for Escape with a modifier already down:
+ *
+ *   macOS   Cmd+Opt+Esc  (Force Quit)   was arriving as Cmd+Opt+`
+ *   Windows Ctrl+Shift+Esc (Task Mgr)   was arriving as Ctrl+Shift+`
+ *
+ * These two overrides force Escape whenever Alt or Ctrl is held, which is
+ * enough to fix both without touching anything else.
+ *
+ * Deliberately NOT set:
+ *   GRAVE_ESC_SHIFT_OVERRIDE would take away "~" on Shift+Esc.
+ *   GRAVE_ESC_GUI_OVERRIDE   would take away Cmd+` window cycling on macOS.
+ *
+ * A bare backtick is on _LOWER, since no combination of QK_GESC produces one.
+ */
+#define GRAVE_ESC_ALT_OVERRIDE
+#define GRAVE_ESC_CTRL_OVERRIDE
+
 /* ── Tap-hold ─────────────────────────────────────────────────────────────
  * The pinky shifts are mod-taps. On stock settings a fast roll into one can
  * settle as a tap and emit a bracket where a capital was meant.

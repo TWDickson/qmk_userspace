@@ -40,10 +40,27 @@ active layer is transparent, and `_QWERTY` is layer 0, so the rest resolves
 against it even though `_GAME` is the active *default* layer. Edits to
 `_QWERTY` therefore carry into `_GAME` automatically.
 
-`KC_GRV` on `_LOWER` is **not** redundant with `QK_GESC` beneath it. `QK_GESC`
-only emits grave while Shift or GUI is held and leaves that modifier applied,
-so Shift gives `~` and, on macOS, GUI+grave cycles windows. It is the only bare
-backtick on the board.
+### Grave, tilde and escape
+
+`QK_GESC` sends grave whenever Shift **or GUI** is held, and leaves that
+modifier applied. So:
+
+| want | press |
+|---|---|
+| `Esc` | top-left, unmodified |
+| `~` | Shift + top-left |
+| `` ` `` | `LOWER` + top-left |
+
+`KC_GRV` on `_LOWER` is therefore **not** redundant — no combination of
+`QK_GESC` yields a bare backtick, because the modifier that triggers grave is
+still in the report. Do not remove it.
+
+The same behaviour silently ate two shortcuts that reach for Escape with a
+modifier already down: Cmd+Opt+Esc (Force Quit, macOS) arrived as Cmd+Opt+`` ` ``,
+and Ctrl+Shift+Esc (Task Manager, Windows) as Ctrl+Shift+`` ` ``.
+`GRAVE_ESC_ALT_OVERRIDE` and `GRAVE_ESC_CTRL_OVERRIDE` force Escape whenever
+Alt or Ctrl is held, fixing both. The Shift and GUI overrides are deliberately
+left off, since those would cost `~` and macOS's Cmd+`` ` `` window cycling.
 
 ## Tap-hold
 
