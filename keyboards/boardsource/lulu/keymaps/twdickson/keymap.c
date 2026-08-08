@@ -166,21 +166,30 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
  * |------+------+------+------+------+------|                    |------+------+------+------+------+------|
  * |      |      |      |      |      |      |                    |      |      |      |      |      |      |
  * |------+------+------+------+------+------|                    |------+------+------+------+------+------|
- * | Caps |THM_NX|RM_HUE|RM_SAT|RM_VAL|GAME  |-------.    ,-------|      |      |      |      |      |      |
+ * | Caps |THM_NX|RM_HUE|RM_SAT|RM_VAL|RM_SPD|-------.    ,-------|      |GAME  |      |      |      |      |
  * |------+------+------+------+------+------|RM_TOGG|    |       |------+------+------+------+------+------|
- * |      |THM_PV|RM_HUD|RM_SAD|RM_VAD|      |-------|    |-------|      |CG_TOG|      |      |      |      |
+ * |      |THM_PV|RM_HUD|RM_SAD|RM_VAD|RM_SPD|-------|    |-------|      |CG_TOG|      |      |      |      |
  * `-----------------------------------------/       /     \      \-----------------------------------------'
  *                   |      |      |      | /      /       \      \  |      | CAD  |      |
  *                   `----------------------------'           '------''--------------------'
  *
  * THEME_NEXT/THEME_PREV take the column RM_NEXT/RM_PREV used to have, which is
  * the same job — step to the next look — done over a curated list instead of
- * over every animation the board happens to compile. THEME_NEXT has moved off
- * the row below as a result; that slot is blank now.
+ * over every animation the board happens to compile.
  *
- * The hue, saturation and brightness controls stay exactly where they were. A
- * theme *seeds* hue/sat/speed and these adjust them from there, which is the
- * point of the table having those fields at all.
+ * The four lighting columns are hue, saturation, brightness and speed, up on
+ * the home row and down on the row below, and they are in that order because it
+ * is the order the four bars appear in on the _ADJUST OLED panel. The left hand
+ * reads as the panel's controls and the panel reads as the left hand's state.
+ * Speed used to have no key at all — only the encoder — which is what made the
+ * panel's fourth bar the one thing on it nothing could drive.
+ *
+ * A theme *seeds* hue/sat/speed and these adjust from there, which is the point
+ * of the table having those fields at all.
+ *
+ * GAME_TOGGLE moved to the right hand to free that column, and landed directly
+ * above CG_TOGG: the board's two mode toggles, which are also exactly the two
+ * things the bottom half of the panel reports.
  *
  * QK_BOOT reboots whichever half is holding the USB cable into its RP2040
  * bootloader, so it mounts as RPI-RP2 and the .uf2 can just be copied over —
@@ -192,8 +201,8 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 [_ADJUST] = LAYOUT(
   XXXXXXX, XXXXXXX,    XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX,                       XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, QK_BOOT,
   XXXXXXX, XXXXXXX,    XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX,                       XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX,
-  KC_CAPS, THEME_NEXT, RM_HUEU, RM_SATU, RM_VALU, GAME_TOGGLE,                    XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX,
-  XXXXXXX, THEME_PREV, RM_HUED, RM_SATD, RM_VALD, XXXXXXX,     RM_TOGG,   XXXXXXX, XXXXXXX, CG_TOGG, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX,
+  KC_CAPS, THEME_NEXT, RM_HUEU, RM_SATU, RM_VALU, RM_SPDU,                        XXXXXXX, GAME_TOGGLE, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX,
+  XXXXXXX, THEME_PREV, RM_HUED, RM_SATD, RM_VALD, RM_SPDD,     RM_TOGG,   XXXXXXX, XXXXXXX, CG_TOGG,     XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX,
                              _______, _______, _______, _______,     _______, _______, KC_CAD,  _______
 ),
 

@@ -306,6 +306,52 @@ bool rgb_theme_process_record(uint16_t keycode, keyrecord_t *record) {
     return false;
 }
 
+/* ── Underglow brightness is normalised across hues ───────────────────────
+ *
+ * The outline is six LEDs a half shining out through a slot, and whether it
+ * reads as a *line* or as six dots depends on whether each one's diffusion
+ * reaches its neighbours. That is a question about apparent brightness, and
+ * apparent brightness is not `val` — it is `val` weighted by how much of the
+ * colour the eye can actually see.
+ *
+ * The eye is roughly 10x more sensitive to green than to blue, so at identical
+ * hsv the outlines were spread over a 4:1 range:
+ *
+ *     Fold   hue 202 violet   luma  35      six dots
+ *     Trail  hue 205 violet   luma  37
+ *     Rose   hue 240 rose     luma  36
+ *     Lulu   hue  12 amber    luma  62      a line
+ *     Zones  hue 107 green    luma 113      a line, and too hot
+ *     Pulse  hue 128 cyan     luma 117
+ *     Mono   white            luma 150
+ *
+ * So the fix is not a brighter number on one theme. Every glow hue is solved
+ * for the value that lands it on the *same* perceived brightness — the amber
+ * one, which is the level that already looked right, and which is also the
+ * ceiling: the violets only just reach it at full value, so nothing higher is
+ * available to normalise to.
+ *
+ * Luminance is linear in v for a fixed hue and saturation, so this is one
+ * divide: probe the hue at full value, then scale.
+ *
+ * This is deliberately not a per-theme knob. A knob would have to be set
+ * correctly for every new theme and would be wrong by default; the hue already
+ * carries the information needed to derive it. `glow_sat` remains the tuning
+ * knob that matters — a paler outline is a brighter one, because white has the
+ * most luminance of anything the LED can make.
+ */
+#    define GLOW_REF_LUMA 106 // amber (hue 12, sat 255) at full value
+
+static uint8_t glow_value(uint8_t hue, uint8_t sat, uint8_t val) {
+    const RGB probe = hsv_to_rgb((HSV){.h = hue, .s = sat, .v = 255});
+    // Rec. 709 weights, x256: R 0.2126, G 0.7152, B 0.0722. Peaks at 254 for
+    // white, and bottoms out at 17 for pure blue — never zero, so no guard.
+    const uint8_t luma = (uint8_t)(((uint16_t)54 * probe.r + (uint16_t)183 * probe.g + (uint16_t)18 * probe.b) >> 8);
+
+    const uint16_t want = ((uint16_t)val * GLOW_REF_LUMA) / (luma ? luma : 1);
+    return want > 255 ? 255 : (uint8_t)want;
+}
+
 static void light(uint8_t row, uint8_t col, RGB rgb, uint8_t led_min, uint8_t led_max) {
     const uint8_t led = g_led_config.matrix_co[row][col];
     if (led == NO_LED || led < led_min || led >= led_max) {
@@ -547,13 +593,19 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
      * The maths is upstream's own, out of breathing_anim.h — sin8 folded about
      * its midpoint so the ramp is symmetric, then doubled to reach full swing.
      */
-    uint8_t glow_val = val;
+    const uint8_t glow_hue = game ? t.game_hue : t.glow_hue;
+    const uint8_t glow_sat = game ? t.accent_sat : t.glow_sat;
+
+    // Normalised first, so the breathing scales a value that already reads the
+    // same as every other theme's rather than one that starts four times too
+    // dim or twice too hot.
+    uint8_t glow_val = glow_value(glow_hue, glow_sat, val);
     if (t.deck == DECK_PULSE && !game) {
         const uint8_t phase = scale16by8(g_rgb_timer, qadd8(rgb_matrix_get_speed() / 8, 1));
-        glow_val            = scale8(val, abs8(sin8(phase) - 128) * 2);
+        glow_val            = scale8(glow_val, abs8(sin8(phase) - 128) * 2);
     }
 
-    const RGB glow = hsv_to_rgb((HSV){.h = game ? t.game_hue : t.glow_hue, .s = game ? t.accent_sat : t.glow_sat, .v = glow_val});
+    const RGB glow = hsv_to_rgb((HSV){.h = glow_hue, .s = glow_sat, .v = glow_val});
     for (uint8_t i = led_min; i < led_max; i++) {
         if (g_led_config.flags[i] & LED_FLAG_UNDERGLOW) {
             rgb_matrix_set_color(i, glow.r, glow.g, glow.b);

@@ -49,7 +49,7 @@ needs no working keymap, which is exactly when you need it.
 | `_GAME` | `GAME_TOGGLE`, persisted | three overrides; everything else falls through |
 | `_LOWER` | left thumb | F1-F12, arrows, backtick, Caps Word, Del |
 | `_RAISE` | right thumb | F13-F24, navigation, editing actions, media, Ins |
-| `_ADJUST` | both thumbs (tri-layer) | lighting, themes, Caps Lock, `QK_BOOT`, Ctrl+Alt+Del |
+| `_ADJUST` | both thumbs (tri-layer) | lighting, themes, mode toggles, Caps Lock, `QK_BOOT`, Ctrl+Alt+Del |
 
 ### `_GAME` states only what it changes
 
@@ -220,6 +220,34 @@ colours read as lit grey and vanish, so the deck wants saturation.
 The **underglow** (`LED_FLAG_UNDERGLOW`, six a half) washes nothing. It escapes
 as a thin line between plate and **black** bottom case and reads as a crisp neon
 outline against the desk — by a distance the most visible thing on the board.
+
+Whether it reads as a *line* or as six dots depends on whether each LED's
+diffusion reaches its neighbours, which is a question about apparent brightness
+— and apparent brightness is not `val`. The eye is roughly 10x more sensitive to
+green than to blue, so at identical hsv the seven outlines were spread over
+**4.3x**:
+
+| glow | luma at `val` 150 | reads as |
+| --- | --- | --- |
+| Fold, hue 202 violet | 35 | six dots |
+| Trail, hue 205 violet | 37 | six dots |
+| Rose, hue 240 rose | 36 | six dots |
+| Lulu, hue 12 amber | 62 | a line |
+| Zones, hue 107 green | 113 | a line, and too hot |
+| Pulse, hue 128 cyan | 117 | |
+| Mono, white | 150 | |
+
+So `glow_value()` solves each hue for the value that lands it on the same
+perceived brightness — the amber one, which already looked right and is also the
+ceiling, since the violets only just reach it at full value. Luminance is linear
+in `v` for a fixed hue and saturation, so it is one probe and one divide.
+Measured spread afterwards: **1.1x**.
+
+This is deliberately *not* a per-theme knob. A knob would have to be set
+correctly for every new theme and would be wrong by default, and the hue already
+carries what is needed to derive it. `glow_sat` stays the tuning knob that
+matters — a paler outline is a brighter one, because white has more luminance
+than any hue the LED can make.
 
 > An earlier version of this file said the underglow lights an "amber
 > underside… a fixed colour nothing in firmware can change", and built a
@@ -482,6 +510,14 @@ of which shows up anywhere else on the board:
 A theme has a name only in the source otherwise, and `CG_TOGG`'s setting is
 invisible until you press a key and get the wrong modifier — which is the single
 most useful line on the panel.
+
+`_ADJUST`'s left hand is laid out to match it: four up/down columns in the order
+`HUE` `SAT` `VAL` `SPD`, the same order as the four bars. The left hand reads as
+the panel's controls and the panel reads as the left hand's state. Speed used to
+have no key at all — only the encoder — which made the fourth bar the one thing
+on the panel nothing could drive. `GAME_TOGGLE` moved to the right hand to free
+that column and landed directly above `CG_TOGG`, putting the board's two mode
+toggles together: exactly the two things the bottom of the panel reports.
 
 The four knobs are **bars, not numbers**, for two reasons. The font is A-Z with
 no digits and `draw_text()` indexes it with `c - 'A'`, so a digit would read off

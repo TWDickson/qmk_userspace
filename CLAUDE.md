@@ -157,6 +157,18 @@ plugging the cable in.
   before the keypress. A theme change mid-fade would persist a half-dimmed board
   as a preference. Use `rgb_theme_user_val()`.
 
+- **Underglow brightness is normalised across hues, and must not become a
+  per-theme knob.** Whether the outline reads as a line or as six dots is a
+  question about *apparent* brightness, and apparent brightness is not `val` —
+  the eye is ~10x more sensitive to green than to blue, so at identical hsv the
+  seven outlines were spread 4.3x (violet luma 35, amber 62, white 150), and the
+  violet themes visibly dotted. `glow_value()` probes the hue at full value and
+  solves for the value matching amber, which already looked right and is also
+  the ceiling — the violets only just reach it. Spread is 1.1x now. A per-theme
+  boost would have to be set correctly for every new theme and would be wrong by
+  default; the hue already carries what is needed. `glow_sat` is the real knob:
+  a paler outline is a brighter one.
+
 - **Theme names are capped at five glyphs.** The `_ADJUST` config panel is 32 px
   across and the font advances 6, so a sixth glyph clips. Same ceiling as the
   shift gate's layer names, and the reason `DECK_MIRROR`'s theme is called Fold.
