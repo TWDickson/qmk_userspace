@@ -140,7 +140,7 @@ static const theme_t PROGMEM themes[] = {
     // accents are all cool because the deck is warm: an accent within ~30 hue
     // of the deck it is drawn on is invisible, which is what a yellow RAISE at
     // 43 on this 24 deck used to be.
-    {.name = "LULU", .mode = RGB_MATRIX_SOLID_COLOR, .hue = 24, .sat = 255, .speed = 96, .deck = DECK_SPLASH, .glow_hue = 12, .glow_sat = 255, .knob_hue = 28, .knob_sat = 180, .accent = {170, 128, 213}, .accent_sat = 255, .game_hue = 85, .caps_hue = 213},
+    {.name = "LULU", .mode = RGB_MATRIX_SOLID_COLOR, .hue = 24, .sat = 255, .speed = 96, .deck = DECK_SPLASH, .glow_hue = 12, .glow_sat = 220, .knob_hue = 28, .knob_sat = 60, .accent = {170, 128, 213}, .accent_sat = 255, .game_hue = 85, .caps_hue = 213},
 
     // Rose — what the board booted into before any of this existed, with the
     // ALPHAS_MODS split finally pointed somewhere. speed is the hue offset
@@ -148,7 +148,7 @@ static const theme_t PROGMEM themes[] = {
     // column and thumbs go red under the red Escape while the alphas stay
     // rose. It used to be 128, which put them 112 hue away: a green fringe on
     // a rose board, almost certainly a leftover from reading speed as a rate.
-    {.name = "ROSE", .mode = RGB_MATRIX_ALPHAS_MODS, .hue = 240, .sat = 239, .speed = 20, .deck = DECK_EFFECT, .glow_hue = 240, .glow_sat = 255, .knob_hue = 24, .knob_sat = 180, .accent = {170, 43, 128}, .accent_sat = 255, .game_hue = 85, .caps_hue = 43},
+    {.name = "ROSE", .mode = RGB_MATRIX_ALPHAS_MODS, .hue = 240, .sat = 239, .speed = 20, .deck = DECK_EFFECT, .glow_hue = 240, .glow_sat = 255, .knob_hue = 24, .knob_sat = 60, .accent = {170, 43, 128}, .accent_sat = 255, .game_hue = 85, .caps_hue = 43},
 
     // Mono — the only colour on the board is information. Not actually
     // monochrome: warm white on the alphas, cool white on the mods, 48
@@ -165,7 +165,7 @@ static const theme_t PROGMEM themes[] = {
     // its x axis runs monotonically 0-224 across the pair, nothing folds it,
     // and the left hand always ends a different colour from the right. Blue
     // under the index fingers easing to rose out at the pinkies.
-    {.name = "FOLD", .mode = RGB_MATRIX_SOLID_COLOR, .hue = 170, .sat = 255, .speed = 64, .deck = DECK_MIRROR, .glow_hue = 202, .glow_sat = 190, .knob_hue = 28, .knob_sat = 180, .accent = {21, 85, 0}, .accent_sat = 255, .game_hue = 85, .caps_hue = 43},
+    {.name = "FOLD", .mode = RGB_MATRIX_SOLID_COLOR, .hue = 170, .sat = 255, .speed = 64, .deck = DECK_MIRROR, .glow_hue = 202, .glow_sat = 150, .knob_hue = 28, .knob_sat = 60, .accent = {21, 85, 0}, .accent_sat = 255, .game_hue = 85, .caps_hue = 43},
 
     // Zones — colour by finger rather than by geometry: the pinky and its
     // outer reach, ring and middle, index and its stretch, then the thumbs.
@@ -173,7 +173,7 @@ static const theme_t PROGMEM themes[] = {
     // used rather than where the LEDs happen to sit. Nothing stock comes
     // close, because every built-in effect is a function of x, y or time and
     // none of them can see the matrix column.
-    {.name = "ZONES", .mode = RGB_MATRIX_SOLID_COLOR, .hue = 85, .sat = 255, .speed = 60, .deck = DECK_ZONES, .glow_hue = 107, .glow_sat = 255, .knob_hue = 26, .knob_sat = 180, .accent = {213, 21, 0}, .accent_sat = 255, .game_hue = 85, .caps_hue = 213},
+    {.name = "ZONES", .mode = RGB_MATRIX_SOLID_COLOR, .hue = 85, .sat = 255, .speed = 60, .deck = DECK_ZONES, .glow_hue = 107, .glow_sat = 160, .knob_hue = 26, .knob_sat = 60, .accent = {213, 21, 0}, .accent_sat = 255, .game_hue = 85, .caps_hue = 213},
 
     // Trail — each key flares on the strike and decays back to the resting
     // deck over about a second. A trail of where the hands have been rather
@@ -181,7 +181,7 @@ static const theme_t PROGMEM themes[] = {
     // than Lulu is. TYPING_HEATMAP is the nearest stock equivalent and is
     // wrong three ways: it hard-codes a blue-to-red ramp that ignores the
     // theme hue, it wants a framebuffer in RAM, and it rests at black.
-    {.name = "TRAIL", .mode = RGB_MATRIX_SOLID_COLOR, .hue = 205, .sat = 255, .speed = 96, .deck = DECK_TRAIL, .glow_hue = 205, .glow_sat = 190, .knob_hue = 24, .knob_sat = 200, .accent = {43, 85, 128}, .accent_sat = 255, .game_hue = 85, .caps_hue = 43},
+    {.name = "TRAIL", .mode = RGB_MATRIX_SOLID_COLOR, .hue = 205, .sat = 255, .speed = 96, .deck = DECK_TRAIL, .glow_hue = 205, .glow_sat = 150, .knob_hue = 24, .knob_sat = 60, .accent = {43, 85, 128}, .accent_sat = 255, .game_hue = 85, .caps_hue = 43},
 
     // Pulse — the deck held perfectly flat while the outline breathes. Only
     // possible because the underglow is already overwritten every frame below,
@@ -189,7 +189,7 @@ static const theme_t PROGMEM themes[] = {
     // one and not the other, and BREATHING takes the whole board including the
     // deck to black at the trough. The calmest theme here, and the one that
     // makes the most of the underglow being a neon line rather than a wash.
-    {.name = "PULSE", .mode = RGB_MATRIX_SOLID_COLOR, .hue = 128, .sat = 255, .speed = 70, .deck = DECK_PULSE, .glow_hue = 128, .glow_sat = 255, .knob_hue = 24, .knob_sat = 200, .accent = {213, 21, 0}, .accent_sat = 255, .game_hue = 85, .caps_hue = 213},
+    {.name = "PULSE", .mode = RGB_MATRIX_SOLID_COLOR, .hue = 128, .sat = 255, .speed = 70, .deck = DECK_PULSE, .glow_hue = 128, .glow_sat = 160, .knob_hue = 24, .knob_sat = 60, .accent = {213, 21, 0}, .accent_sat = 255, .game_hue = 85, .caps_hue = 213},
 };
 
 #    define THEME_COUNT (sizeof(themes) / sizeof(themes[0]))
@@ -363,48 +363,40 @@ bool rgb_theme_process_record(uint16_t keycode, keyrecord_t *record) {
  * apparent brightness is not `val` — it is `val` weighted by how much of the
  * colour the eye can actually see.
  *
- * The eye is roughly 10x more sensitive to green than to blue, so at identical
- * hsv the outlines were spread over a 4:1 range:
+ * This used to normalise on Rec. 709 luma: probe each glow hue, divide, land
+ * every theme on the same *perceived* brightness. Hardware says that is the
+ * wrong question, and says it clearly. The only three hues whose luma exceeds
+ * the reference are green (191), cyan (198) and white (254) — so those three
+ * alone were scaled below full, to 200, 193 and 150. They are exactly the three
+ * that came back reported as "almost invisible", "off or blue" and "very
+ * minimal", and the reported order across all seven themes was monotonic in v
+ * with no regard for hue at all.
  *
- *     Fold   hue 202 violet   luma  35      six dots
- *     Trail  hue 205 violet   luma  37
- *     Rose   hue 240 rose     luma  36
- *     Lulu   hue  12 amber    luma  62      a line
- *     Zones  hue 107 green    luma 113      a line, and too hot
- *     Pulse  hue 128 cyan     luma 117
- *     Mono   white            luma 150
+ * Luma answers which of two patches looks brighter at equal area. It does not
+ * answer how far one LED's light carries through a slot, which is what decides
+ * whether six of them read as a line or as six dots — and that is drive on the
+ * brightest die. The eye's green sensitivity does not widen the slot.
  *
- * So the fix is not a brighter number on one theme. Every glow hue is solved
- * for the value that lands it on the *same* perceived brightness — the amber
- * one, which is the level that already looked right, and which is also the
- * ceiling: the violets only just reach it at full value, so nothing higher is
- * available to normalise to.
+ * So there is no normalisation. Every outline runs flat out, and `glow_sat` is
+ * the only lever: a paler outline lights all three dies instead of one, which
+ * is more total light through the slot and more spill between neighbours. That
+ * is also the lever for a hue whose hotspot reads as a single die — Fold's
+ * violet at sat 255 is RGB(184, 0, 255) and shows as a red pinpoint where each
+ * LED sits; pulling saturation down fills the green in and spreads it.
  *
- * Luminance is linear in v for a fixed hue and saturation, so this is one
- * divide: probe the hue at full value, then scale.
- *
- * This is deliberately not a per-theme knob. A knob would have to be set
- * correctly for every new theme and would be wrong by default; the hue already
- * carries the information needed to derive it. `glow_sat` remains the tuning
- * knob that matters — a paler outline is a brighter one, because white has the
- * most luminance of anything the LED can make.
+ * What saturation cannot fix is spacing. The six positions per half are not
+ * evenly spread — three across the top at ~34 apart, and an outer one on its
+ * own at the corner — so the top edge fuses first and the corner LED stays a
+ * distinct point at any brightness. That is where the diodes are.
  */
-#    define GLOW_REF_LUMA 150 // plain white at the deck's own ceiling
-
-static uint8_t glow_value(uint8_t hue, uint8_t sat, uint8_t val) {
+static uint8_t glow_value(uint8_t val) {
     /* The deck's ceiling is RGB_MATRIX_MAXIMUM_BRIGHTNESS — a power budget for
      * 70 LEDs, which the twelve in the outline do not have to share. Scaling val
-     * into the full range first is what lets an outline run at 255 while the
-     * deck stays at the board's own limit.
+     * into the full range is what lets an outline run at 255 while the deck
+     * stays at the board's own limit, and it is all this does: every theme's
+     * outline is driven flat out, and `glow_sat` is the only lever.
      */
-    const uint16_t base = ((uint16_t)val * 255) / RGB_MATRIX_MAXIMUM_BRIGHTNESS;
-
-    const RGB probe = hsv_to_rgb((HSV){.h = hue, .s = sat, .v = 255});
-    // Rec. 709 weights, x256: R 0.2126, G 0.7152, B 0.0722. Peaks at 254 for
-    // white, and bottoms out at 17 for pure blue — never zero, so no guard.
-    const uint8_t luma = (uint8_t)(((uint16_t)54 * probe.r + (uint16_t)183 * probe.g + (uint16_t)18 * probe.b) >> 8);
-
-    const uint16_t want = (base * GLOW_REF_LUMA) / (luma ? luma : 1);
+    const uint16_t want = ((uint16_t)val * 255) / RGB_MATRIX_MAXIMUM_BRIGHTNESS;
     return want > 255 ? 255 : (uint8_t)want;
 }
 
@@ -652,10 +644,9 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
     const uint8_t glow_hue = game ? t.game_hue : t.glow_hue;
     const uint8_t glow_sat = game ? t.accent_sat : t.glow_sat;
 
-    // Normalised first, so the breathing scales a value that already reads the
-    // same as every other theme's rather than one that starts four times too
-    // dim or twice too hot.
-    uint8_t glow_val = glow_value(glow_hue, glow_sat, val);
+    // Scaled into the outline's own range first, so the breathing swings the
+    // full line rather than a value that starts capped at the deck's ceiling.
+    uint8_t glow_val = glow_value(val);
     if (t.deck == DECK_PULSE && !game) {
         const uint8_t phase = scale16by8(g_rgb_timer, qadd8(rgb_matrix_get_speed() / 8, 1));
         glow_val            = scale8(glow_val, abs8(sin8(phase) - 128) * 2);
