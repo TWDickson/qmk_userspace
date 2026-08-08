@@ -3,7 +3,8 @@
 
 #include "oled_animation.h"
 #include "keymap.h"
-#include "lib/oled.h"
+
+#include <string.h>
 
 // clang-format off
 static const char PROGMEM space_row_1[] = {
@@ -202,19 +203,130 @@ static const char PROGMEM mask_row_4[] = {
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
 };
 
-// "GAME" as a column bitmap, OR'd over the top row while the game layer is the
-// active default. Six columns per glyph.
-static const char PROGMEM game_banner[] = {
-    0x7e, 0x81, 0x81, 0x89, 0x8f, 0x4e, // G
-    0xfe, 0x11, 0x11, 0x11, 0x11, 0xfe, // A
-    0xff, 0x06, 0x18, 0x18, 0x06, 0xff, // M
-    0xff, 0x91, 0x91, 0x91, 0x91, 0x81, // E
+/* A-Z in a 5x7 font, one byte per *screen* column, bit 0 the topmost pixel.
+ * Held in screen coordinates rather than framebuffer ones because the panels
+ * are mounted portrait — see draw_text() for the transpose that puts it there.
+ */
+static const char PROGMEM font5x7[26][5] = {
+    {0x7e, 0x11, 0x11, 0x11, 0x7e}, // A
+    {0x7f, 0x49, 0x49, 0x49, 0x36}, // B
+    {0x3e, 0x41, 0x41, 0x41, 0x22}, // C
+    {0x7f, 0x41, 0x41, 0x22, 0x1c}, // D
+    {0x7f, 0x49, 0x49, 0x49, 0x41}, // E
+    {0x7f, 0x09, 0x09, 0x09, 0x01}, // F
+    {0x3e, 0x41, 0x49, 0x49, 0x7a}, // G
+    {0x7f, 0x08, 0x08, 0x08, 0x7f}, // H
+    {0x00, 0x41, 0x7f, 0x41, 0x00}, // I
+    {0x20, 0x40, 0x41, 0x3f, 0x01}, // J
+    {0x7f, 0x08, 0x14, 0x22, 0x41}, // K
+    {0x7f, 0x40, 0x40, 0x40, 0x40}, // L
+    {0x7f, 0x02, 0x0c, 0x02, 0x7f}, // M
+    {0x7f, 0x04, 0x08, 0x10, 0x7f}, // N
+    {0x3e, 0x41, 0x41, 0x41, 0x3e}, // O
+    {0x7f, 0x09, 0x09, 0x09, 0x06}, // P
+    {0x3e, 0x41, 0x51, 0x21, 0x5e}, // Q
+    {0x7f, 0x09, 0x19, 0x29, 0x46}, // R
+    {0x46, 0x49, 0x49, 0x49, 0x31}, // S
+    {0x01, 0x01, 0x7f, 0x01, 0x01}, // T
+    {0x3f, 0x40, 0x40, 0x40, 0x3f}, // U
+    {0x1f, 0x20, 0x40, 0x20, 0x1f}, // V
+    {0x3f, 0x40, 0x38, 0x40, 0x3f}, // W
+    {0x63, 0x14, 0x08, 0x14, 0x63}, // X
+    {0x07, 0x08, 0x70, 0x08, 0x07}, // Y
+    {0x61, 0x51, 0x49, 0x45, 0x43}, // Z
 };
 // clang-format on
 
 #define ANIM_WIDTH 128
 #define ANIM_ROWS 4
-#define GAME_BANNER_COL 90
+#define SCREEN_W (ANIM_ROWS * 8) // 32 px across, the short axis of the panel
+#define GLYPH_W 5
+#define GLYPH_H 7
+#define GLYPH_ADVANCE (GLYPH_W + 1)
+
+typedef char framebuffer_t[ANIM_ROWS][ANIM_WIDTH];
+
+typedef enum { PX_SET, PX_CLEAR, PX_XOR } px_op_t;
+
+/* The panels are 128x32 and mounted with the long axis running away from the
+ * user, so what the framebuffer calls a row is a screen *column*: buffer +x
+ * runs up the screen and buffer +y runs across it. Upstream's own layer0_img
+ * only decodes to legible glyphs under that same rotation, which is the
+ * evidence for it, and the GAME banner confirmed it on hardware.
+ *
+ * The starfield does not care — the ship simply flies up the long axis. Text
+ * does: drawn the ordinary way it comes out on its side. So glyphs are authored
+ * in screen coordinates and mapped in with
+ *
+ *     screen (sx, sy) -> buffer (x = ANIM_WIDTH - 1 - sy, y = sx)
+ *
+ * which means one glyph column becomes one *bit* of eight different bytes.
+ *
+ * If a flash ever shows text upside down, the panel is the other way round and
+ * the two axes in that mapping are what to invert — nothing else here changes.
+ *
+ * Everything drawn in screen coordinates goes through px(), which is why it is
+ * a function call per pixel and not a memset: one screen column lands on one
+ * *bit* of eight different framebuffer bytes, so there is no run of pixels that
+ * is also a run of bytes.
+ */
+static void px(framebuffer_t fb, uint8_t sx, uint8_t sy, px_op_t op) {
+    if (sx >= SCREEN_W || sy >= ANIM_WIDTH) {
+        return;
+    }
+    char *const   b = &fb[sx / 8][ANIM_WIDTH - 1 - sy];
+    const uint8_t m = 1 << (sx % 8);
+    switch (op) {
+        case PX_SET:
+            *b |= (char)m;
+            break;
+        case PX_CLEAR:
+            *b &= (char)~m;
+            break;
+        case PX_XOR:
+            *b ^= (char)m;
+            break;
+    }
+}
+
+static void rect(framebuffer_t fb, uint8_t sx, uint8_t sy, uint8_t w, uint8_t h, px_op_t op) {
+    for (uint8_t x = sx; x < sx + w; x++) {
+        for (uint8_t y = sy; y < sy + h; y++) {
+            px(fb, x, y, op);
+        }
+    }
+}
+
+/* `text` must be A-Z and spaces. sx is the screen column of the left edge, sy
+ * the screen row of the top edge. Only 32 screen columns exist, so a string is
+ * limited to five glyphs.
+ */
+static void draw_text(framebuffer_t fb, const char *text, uint8_t sx, uint8_t sy) {
+    for (uint8_t i = 0; text[i]; i++) {
+        if (text[i] == ' ') {
+            continue;
+        }
+        const uint8_t g = (uint8_t)(text[i] - 'A');
+        for (uint8_t col = 0; col < GLYPH_W; col++) {
+            const uint8_t x = sx + i * GLYPH_ADVANCE + col;
+            if (x >= SCREEN_W) {
+                return; // ran off the short edge
+            }
+            const uint8_t bits = pgm_read_byte(&font5x7[g][col]);
+            for (uint8_t row = 0; row < GLYPH_H; row++) {
+                if (bits & (1 << row)) {
+                    px(fb, x, sy + row, PX_SET);
+                }
+            }
+        }
+    }
+}
+
+// Screen column that centres a string of `len` glyphs across the short axis.
+static uint8_t centre_sx(uint8_t len) {
+    const uint8_t w = len * GLYPH_ADVANCE - 1; // no trailing gap on the last glyph
+    return w >= SCREEN_W ? 0 : (SCREEN_W - w) / 2;
+}
 
 static const char *const space_rows[ANIM_ROWS] = {space_row_1, space_row_2, space_row_3, space_row_4};
 static const char *const ship_rows[ANIM_ROWS]  = {ship_row_1, ship_row_2, ship_row_3, ship_row_4};
@@ -225,66 +337,179 @@ static const char *const mask_rows[ANIM_ROWS]  = {mask_row_1, mask_row_2, mask_r
 // to wrap back to the start.
 static uint16_t scroll = 0;
 
+#define GAME_BANNER_SY 3 // screen rows down from the top edge
+
 static void render_starfield(void) {
     const uint8_t wpm  = get_current_wpm();
     const uint8_t nose = wpm / 4; // the ship pulls ahead as typing speed climbs
     const bool    game = get_highest_layer(default_layer_state) == _GAME;
 
-    char row[ANIM_WIDTH];
+    // Static rather than automatic: the whole frame is composed before any of
+    // it is written now that the banner spans pages, and 512 bytes is more than
+    // this task wants on the stack.
+    static framebuffer_t fb;
 
     for (uint8_t r = 0; r < ANIM_ROWS; r++) {
         // Ahead of the ship's nose there is nothing but starfield.
         for (uint8_t i = 0; i < nose; i++) {
-            row[i] = pgm_read_byte(space_rows[r] + i + scroll);
+            fb[r][i] = pgm_read_byte(space_rows[r] + i + scroll);
         }
         // From the nose back, the mask clears a hole in the field and the ship
         // sprite drops into it.
         for (uint8_t i = nose; i < ANIM_WIDTH; i++) {
-            row[i] = (pgm_read_byte(space_rows[r] + i + scroll) & pgm_read_byte(mask_rows[r] + i - nose)) | pgm_read_byte(ship_rows[r] + i - nose);
+            fb[r][i] = (pgm_read_byte(space_rows[r] + i + scroll) & pgm_read_byte(mask_rows[r] + i - nose)) | pgm_read_byte(ship_rows[r] + i - nose);
         }
-        if (game && r == 0) {
-            for (uint8_t i = 0; i < sizeof(game_banner); i++) {
-                row[GAME_BANNER_COL + i] |= pgm_read_byte(game_banner + i);
-            }
-        }
+    }
+
+    if (game) {
+        // Knock a hole in the field first, so the banner is read against black
+        // rather than through it.
+        const uint8_t sx = centre_sx(4);
+        rect(fb, sx, GAME_BANNER_SY, 4 * GLYPH_ADVANCE - 1, GLYPH_H, PX_CLEAR);
+        draw_text(fb, "GAME", sx, GAME_BANNER_SY);
+    }
+
+    for (uint8_t r = 0; r < ANIM_ROWS; r++) {
         oled_set_cursor(0, r);
-        oled_write_raw(row, ANIM_WIDTH);
+        oled_write_raw(fb[r], ANIM_WIDTH);
     }
 
     scroll = (scroll + 1 + wpm / 15) % (ANIM_WIDTH * 2);
 }
 
-// The keyboard's own oled_init_kb() drives the secondary panel at 180°.
-// Reversing the glyph byte-wise and bit-wise is the exact inverse of that
-// rotation for a full-framebuffer image, which is what lands the layer glyph
-// the right way up. Both steps are load-bearing — dropping either one alone
-// turns the image upside down.
-static void render_layer_glyph(uint8_t layer) {
-    const char *img;
-    switch (layer) {
-        case _GAME:
-            img = layer1_img;
-            break;
-        case _LOWER:
-            img = layer2_img;
-            break;
-        case _RAISE:
-            img = layer3_img;
-            break;
-        default:
-            img = layer0_img;
-            break;
+/* ── The shift gate ───────────────────────────────────────────────────────────
+ *
+ * The secondary panel is 32 px across and 128 px down — a column — and there
+ * are five layers to show in it, so they are stacked like the gate of an
+ * automatic shifter and a lit block slides between the positions.
+ *
+ *          GAME          the two *default* layers, above the gate: where the
+ *        ▌ BASE ▐        board is parked and what it returns to on release
+ *        ────  ────      the gate, with the notch the lever passes through
+ *         [LOWER]        the three *momentary* layers, below it: where the
+ *          RAISE         board only is for as long as a thumb holds it there
+ *           ADJ
+ *
+ * That split is the whole reason this beats a list. The line is not decoration,
+ * it is the difference between a layer you toggle and a layer you hold, and the
+ * position of the block above or below it says which kind you are in before you
+ * have read a single word.
+ *
+ * The two detent marks flank whichever default layer is engaged, so GAME mode
+ * stays legible even while a momentary layer is held over it. They fit because
+ * only the four-glyph names — GAME and BASE — can ever be a default layer; the
+ * five-glyph ones use all 29 of the 32 columns and leave no margin.
+ *
+ * This replaces the board's own layerN_img bitmaps, which are not digits: each
+ * is a dial with 1 and 2 printed at the top, 4 and 3 at the bottom, and a
+ * pointer swinging to one of them, so layerN_img points at N+1 and _LOWER
+ * (enum 2) displayed a 3. No assignment fixes that — the dial has four
+ * positions and this keymap has five layers, which is also why _ADJUST had
+ * nowhere to go at all.
+ */
+#define GATE_BLOCK_H 13 // 7px glyph with 3px of air above and below it
+#define GATE_TEXT_DY 3  // where the glyph sits inside that block
+#define GATE_PITCH 16   // block top to block top
+#define GATE_TOP 19     // the first default layer; the second is a pitch below
+#define GATE_LINE_SY 55 // the gate, centred in the gap either side of it
+#define GATE_SPLIT 64   // the first momentary layer, then two more pitches down
+#define GATE_NOTCH_SX 13
+#define GATE_NOTCH_W 6 // the gap in the gate line the block passes through
+#define GATE_DETENT_W 3
+#define GATE_DETENT_H 5 // marks flanking whichever default layer is engaged
+#define GATE_DETENT_DY ((GATE_BLOCK_H - GATE_DETENT_H) / 2)
+
+/* Indexed by layer, so the enum order and the gate order can differ — GAME sits
+ * above BASE on the panel but below it in the enum.
+ *
+ * clang-format off, the same as the sprite tables above: the config sets no
+ * column limit, so it would otherwise put all five on one line and the gate
+ * would stop looking like a gate in the one place it is written down.
+ */
+// clang-format off
+static const struct {
+    const char *name;
+    uint8_t     sy; // top edge of that position's block
+} gate[] = {
+    [_GAME]   = {"GAME",  GATE_TOP},
+    [_QWERTY] = {"BASE",  GATE_TOP + GATE_PITCH},
+    [_LOWER]  = {"LOWER", GATE_SPLIT},
+    [_RAISE]  = {"RAISE", GATE_SPLIT + GATE_PITCH},
+    [_ADJUST] = {"ADJ",   GATE_SPLIT + 2 * GATE_PITCH},
+};
+// clang-format on
+
+#define GATE_POSITIONS (sizeof(gate) / sizeof(gate[0]))
+
+/* The keyboard's own oled_init_kb() drives the secondary panel at 180°, and
+ * oled_write_raw() bypasses the driver's rotation handling. Reversing the
+ * finished frame byte-wise and bit-wise is the exact inverse for a
+ * full-framebuffer write, which is what lands it the right way up. Both steps
+ * are load-bearing — dropping either alone turns the panel upside down.
+ *
+ * The gate is the first thing on this panel whose vertical *order* matters
+ * rather than just its glyphs. If a flash comes up with ADJ at the top and the
+ * letters upside down with it, that reversal is what to look at; nothing in the
+ * gate's own coordinates needs to change.
+ */
+static void render_gate(uint8_t block_sy, uint8_t engaged) {
+    static framebuffer_t fb;
+    memset(fb, 0, sizeof(fb));
+
+    for (uint8_t i = 0; i < GATE_POSITIONS; i++) {
+        draw_text(fb, gate[i].name, centre_sx(strlen(gate[i].name)), gate[i].sy + GATE_TEXT_DY);
     }
 
-    static char flipped[sizeof(layer0_img)];
-    for (uint16_t i = 0; i < sizeof(flipped); i++) {
-        uint8_t b = pgm_read_byte(img + sizeof(flipped) - 1 - i);
+    for (uint8_t x = 0; x < SCREEN_W; x++) {
+        if (x < GATE_NOTCH_SX || x >= GATE_NOTCH_SX + GATE_NOTCH_W) {
+            px(fb, x, GATE_LINE_SY, PX_SET);
+        }
+    }
+
+    const uint8_t detent_sy = gate[engaged].sy + GATE_DETENT_DY;
+    rect(fb, 0, detent_sy, GATE_DETENT_W, GATE_DETENT_H, PX_SET);
+    rect(fb, SCREEN_W - GATE_DETENT_W, detent_sy, GATE_DETENT_W, GATE_DETENT_H, PX_SET);
+
+    // Inverting rather than filling is what lets the block sit *on* a name
+    // instead of erasing it, and it costs nothing: the glyphs are already drawn.
+    rect(fb, 0, block_sy, SCREEN_W, GATE_BLOCK_H, PX_XOR);
+
+    char *flat = &fb[0][0];
+    for (uint16_t i = 0; i < sizeof(fb) / 2; i++) {
+        uint8_t a = (uint8_t)flat[i];
+        uint8_t b = (uint8_t)flat[sizeof(fb) - 1 - i];
+        a         = ((a & 0xf0) >> 4) | ((a & 0x0f) << 4);
+        a         = ((a & 0xcc) >> 2) | ((a & 0x33) << 2);
+        a         = ((a & 0xaa) >> 1) | ((a & 0x55) << 1);
         b         = ((b & 0xf0) >> 4) | ((b & 0x0f) << 4);
         b         = ((b & 0xcc) >> 2) | ((b & 0x33) << 2);
         b         = ((b & 0xaa) >> 1) | ((b & 0x55) << 1);
-        flipped[i] = (char)b;
+
+        flat[i]                  = (char)b;
+        flat[sizeof(fb) - 1 - i] = (char)a;
     }
-    oled_write_raw(flipped, sizeof(flipped));
+
+    oled_write_raw(flat, sizeof(fb));
+}
+
+/* Where the block is right now, easing out so it leaves fast and settles slow —
+ * the shape a lever falling into a detent has, and the reason a slide reads as
+ * mechanical rather than as a fade.
+ *
+ * Driven off a timer rather than counting frames because the frame rate here is
+ * not ours to pick: OLED_UPDATE_INTERVAL defaults to 50 ms on split boards, and
+ * anything that changes it would otherwise change the animation with it.
+ */
+#define GATE_SLIDE_MS 180
+
+static uint8_t gate_pos(uint8_t from, uint8_t to, uint16_t started) {
+    const uint16_t elapsed = timer_elapsed(started);
+    if (elapsed >= GATE_SLIDE_MS) {
+        return to;
+    }
+    const uint16_t t = (uint16_t)(((uint32_t)elapsed * 256) / GATE_SLIDE_MS);    // 0-255
+    const uint16_t f = 256 - (uint16_t)(((uint32_t)(256 - t) * (256 - t)) >> 8); // 1 - (1 - t)²
+    return (uint8_t)((int16_t)from + (((int16_t)to - (int16_t)from) * (int16_t)f) / 256);
 }
 
 void oled_render_animation(void) {
@@ -293,12 +518,40 @@ void oled_render_animation(void) {
         return;
     }
 
-    // Reversing 512 bytes every frame for a glyph that only changes on a layer
-    // switch is not worth the scan time.
-    static uint8_t last_layer = UINT8_MAX;
-    const uint8_t  layer      = get_highest_layer(layer_state);
-    if (layer != last_layer) {
-        last_layer = layer;
-        render_layer_glyph(layer);
+    /* default_layer_state, not just layer_state: _GAME is only ever a *default*
+     * layer, so it never sets a bit in layer_state, and reading that alone left
+     * the _GAME position unreachable — the panel showed the base one all game.
+     */
+    const uint8_t layer   = get_highest_layer(layer_state | default_layer_state);
+    const uint8_t engaged = get_highest_layer(default_layer_state);
+    const uint8_t target  = gate[layer].sy;
+
+    static bool     ready = false;
+    static uint8_t  from, to, drawn_at, drawn_engaged;
+    static uint16_t started;
+
+    if (!ready) {
+        ready = true;
+        from = to     = target;
+        started       = timer_read();
+        drawn_at      = target + 1; // anything but `target`, so the first frame draws
+        drawn_engaged = engaged;
+    }
+
+    if (target != to) {
+        from    = gate_pos(from, to, started); // pick up wherever a slide in flight had got to
+        to      = target;
+        started = timer_read();
+    }
+
+    /* Redrawing 512 bytes for a panel that has not changed is not worth the
+     * scan time, so this only writes while the block is actually moving —
+     * roughly four frames per layer change, and nothing at all at rest.
+     */
+    const uint8_t pos = gate_pos(from, to, started);
+    if (pos != drawn_at || engaged != drawn_engaged) {
+        drawn_at      = pos;
+        drawn_engaged = engaged;
+        render_gate(pos, engaged);
     }
 }

@@ -6,6 +6,59 @@ permissions:
   contents: write
 
 jobs:
+  lint:
+    name: 'QMK Userspace Lint'
+    runs-on: ubuntu-latest
+    container: ghcr.io/qmk/qmk_cli
+
+    steps:
+      - name: Check out userspace
+        uses: actions/checkout@v4
+        with:
+          path: qmk_userspace
+
+      # Lint resolves a keymap through the overlay, so it needs a firmware tree
+      # to resolve it against — but not the submodules, which only matter when
+      # something is actually being compiled.
+      - name: Check out QMK firmware
+        uses: actions/checkout@v4
+        with:
+          repository: qmk/qmk_firmware
+          ref: master
+          path: qmk_firmware
+
+      - name: Trust the checkouts
+        run: git config --global --add safe.directory '*'
+
+      - name: Point QMK at both trees
+        run: |
+          qmk config user.qmk_home=$GITHUB_WORKSPACE/qmk_firmware
+          qmk config user.overlay_dir=$GITHUB_WORKSPACE/qmk_userspace
+
+      # Driven off qmk.json rather than a hardcoded target, so a board added to
+      # build_targets is linted without anyone remembering to edit this file.
+      - name: qmk lint
+        run: |
+          python3 - <<'PY'
+          import json, subprocess
+          targets = json.load(open('qmk_userspace/qmk.json'))['build_targets']
+          for keyboard, keymap in targets:
+              print(f'::group::lint {keyboard}:{keymap}')
+              subprocess.run(
+                  ['qmk', 'lint', '--keyboard', keyboard, '--keymap', keymap],
+                  check=True,
+              )
+              print('::endgroup::')
+          PY
+
+      # The PROGMEM sprite tables are wrapped in clang-format off/on, so this
+      # only ever has an opinion about actual code.
+      - name: clang-format
+        working-directory: qmk_userspace
+        run: |
+          find keyboards -type f \( -name '*.c' -o -name '*.h' \) -print0 \
+            | xargs -0 clang-format --dry-run --Werror
+
   build:
     name: 'QMK Userspace Build'
     uses: qmk/.github/.github/workflows/qmk_userspace_build.yml@main
