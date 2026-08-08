@@ -21,6 +21,24 @@
 #define SPLIT_WATCHDOG_ENABLE    // reboot a half that comes up without a link
 #define SPLIT_TRANSPORT_MIRROR   // so reactive effects fire on both halves
 
+/* The one custom split transaction in this keymap, and the exception that
+ * proves the rule against them.
+ *
+ * SPLIT_TRANSPORT_MIRROR copies the master's *matrix* to the slave; it does not
+ * run process_record there. So THEME_NEXT never reaches the slave, its stored
+ * theme index never changes, and it renders whatever theme its own EEPROM
+ * happens to hold — a different deck, underglow, knobs and accents from the
+ * half beside it. On Zones that showed up as one green half and one gradient.
+ *
+ * No SPLIT_*_ENABLE covers user eeconfig, so there is nothing built-in to reach
+ * for. This is one byte, sent when it changes plus a slow heartbeat, and it
+ * decides how half the board looks — not the 100 ms poll with retry and
+ * watchdog logic that timeout_fade.c was, and not a cosmetic indicator that is
+ * already visible on the half you are looking at, which is why Caps Word still
+ * does not get one.
+ */
+#define SPLIT_TRANSACTION_IDS_USER RPC_ID_SYNC_THEME
+
 /* ── Idle behaviour ───────────────────────────────────────────────────────
  * One idle threshold drives both the lighting and the panel. The RGB
  * ramp-down that runs ahead of the cutoff lives in keymap.c; the OLED fade is

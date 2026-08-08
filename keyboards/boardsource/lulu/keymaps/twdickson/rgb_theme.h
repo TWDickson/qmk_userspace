@@ -11,6 +11,13 @@ void rgb_theme_init(void);
 // Handles THEME_NEXT / THEME_PREV. Returns false if it consumed the record.
 bool rgb_theme_process_record(uint16_t keycode, keyrecord_t *record);
 
+/* Pushes the theme index to the other half. Call from housekeeping_task_user().
+ * Only the master runs process_record, so without this the slave keeps whatever
+ * theme its own EEPROM holds and renders a different one from the half beside
+ * it. No-ops on the slave.
+ */
+void rgb_theme_sync_task(void);
+
 /* Brightness with the idle ramp taken back out — defined in keymap.c next to
  * the ramp itself. theme_apply() persists, and the live value is not safe to
  * persist mid-fade; see the comment on the definition.

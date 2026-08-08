@@ -13,6 +13,12 @@
 // includes it by this same path.
 #    include <lib/lib8tion/lib8tion.h>
 
+// RPC_ID_SYNC_THEME comes from SPLIT_TRANSACTION_IDS_USER in config.h, and the
+// transaction_rpc_* API lives here rather than in quantum.h.
+#    ifdef SPLIT_KEYBOARD
+#        include "transactions.h"
+#    endif
+
 /* A theme is the resting look of the board plus the palette the indicators
  * draw from, so that "which layer am I on" and "is Caps Word armed" are told in
  * a colour that belongs with the base rather than clashing with it.
@@ -159,7 +165,7 @@ static const theme_t PROGMEM themes[] = {
     // its x axis runs monotonically 0-224 across the pair, nothing folds it,
     // and the left hand always ends a different colour from the right. Blue
     // under the index fingers easing to rose out at the pinkies.
-    {.name = "FOLD", .mode = RGB_MATRIX_SOLID_COLOR, .hue = 170, .sat = 255, .speed = 64, .deck = DECK_MIRROR, .glow_hue = 202, .glow_sat = 255, .knob_hue = 28, .knob_sat = 180, .accent = {21, 85, 0}, .accent_sat = 255, .game_hue = 85, .caps_hue = 43},
+    {.name = "FOLD", .mode = RGB_MATRIX_SOLID_COLOR, .hue = 170, .sat = 255, .speed = 64, .deck = DECK_MIRROR, .glow_hue = 202, .glow_sat = 190, .knob_hue = 28, .knob_sat = 180, .accent = {21, 85, 0}, .accent_sat = 255, .game_hue = 85, .caps_hue = 43},
 
     // Zones — colour by finger rather than by geometry: the pinky and its
     // outer reach, ring and middle, index and its stretch, then the thumbs.
@@ -175,7 +181,7 @@ static const theme_t PROGMEM themes[] = {
     // than Lulu is. TYPING_HEATMAP is the nearest stock equivalent and is
     // wrong three ways: it hard-codes a blue-to-red ramp that ignores the
     // theme hue, it wants a framebuffer in RAM, and it rests at black.
-    {.name = "TRAIL", .mode = RGB_MATRIX_SOLID_COLOR, .hue = 205, .sat = 255, .speed = 96, .deck = DECK_TRAIL, .glow_hue = 205, .glow_sat = 255, .knob_hue = 24, .knob_sat = 200, .accent = {43, 85, 128}, .accent_sat = 255, .game_hue = 85, .caps_hue = 43},
+    {.name = "TRAIL", .mode = RGB_MATRIX_SOLID_COLOR, .hue = 205, .sat = 255, .speed = 96, .deck = DECK_TRAIL, .glow_hue = 205, .glow_sat = 190, .knob_hue = 24, .knob_sat = 200, .accent = {43, 85, 128}, .accent_sat = 255, .game_hue = 85, .caps_hue = 43},
 
     // Pulse — the deck held perfectly flat while the outline breathes. Only
     // possible because the underglow is already overwritten every frame below,
@@ -247,6 +253,48 @@ static void theme_apply(void) {
  * THEME_NEXT resyncs it, and there is no cheap way to detect it that is worth
  * more than that.
  */
+/* ── Keeping the halves on the same theme ─────────────────────────────────
+ *
+ * Only the master runs process_record, so THEME_NEXT never reaches the slave
+ * and eeconfig_update_user() only ever writes the master's copy. The slave was
+ * therefore stuck on whatever index its own EEPROM held — rendering a different
+ * deck, underglow, knob colour and accent set from the half next to it. It was
+ * invisible while every theme used a core effect, because rgb_matrix_config *is*
+ * synced by the core; it became obvious the moment the decks started differing.
+ *
+ * One byte, sent when it changes and re-sent slowly so a slave that reboots
+ * (SPLIT_WATCHDOG_ENABLE will do that) picks it back up. The slave keeps it in
+ * RAM only — writing its EEPROM every theme change would double the wear for
+ * nothing, since this arrives again on the next heartbeat anyway.
+ */
+#    define THEME_SYNC_HEARTBEAT_MS 5000
+
+static void theme_sync_handler(uint8_t in_len, const void *in_data, uint8_t out_len, void *out_data) {
+    if (in_len != sizeof(uint8_t)) {
+        return;
+    }
+    const uint8_t i = *(const uint8_t *)in_data;
+    if (i < THEME_COUNT) {
+        theme_config.theme = i;
+    }
+}
+
+void rgb_theme_sync_task(void) {
+    if (!is_keyboard_master()) {
+        return;
+    }
+    static uint8_t  sent = 0xff; // nothing valid, so the first tick always sends
+    static uint32_t last = 0;
+
+    if (sent == theme_config.theme && timer_elapsed32(last) < THEME_SYNC_HEARTBEAT_MS) {
+        return;
+    }
+    if (transaction_rpc_send(RPC_ID_SYNC_THEME, sizeof(uint8_t), &theme_config.theme)) {
+        sent = theme_config.theme;
+        last = timer_read32();
+    }
+}
+
 /* For the _ADJUST config panel. Copied into a static rather than returning a
  * pointer into the caller's stack copy of the theme, since the OLED renderer
  * holds it across draw_text().
@@ -264,6 +312,7 @@ static void zones_init(void); // defined with the deck renderers, further down
 void rgb_theme_init(void) {
     theme_config.raw = eeconfig_read_user();
     zones_init();
+    transaction_register_rpc(RPC_ID_SYNC_THEME, theme_sync_handler);
 }
 
 void eeconfig_init_user(void) {
@@ -340,15 +389,22 @@ bool rgb_theme_process_record(uint16_t keycode, keyrecord_t *record) {
  * knob that matters — a paler outline is a brighter one, because white has the
  * most luminance of anything the LED can make.
  */
-#    define GLOW_REF_LUMA 106 // amber (hue 12, sat 255) at full value
+#    define GLOW_REF_LUMA 150 // plain white at the deck's own ceiling
 
 static uint8_t glow_value(uint8_t hue, uint8_t sat, uint8_t val) {
+    /* The deck's ceiling is RGB_MATRIX_MAXIMUM_BRIGHTNESS — a power budget for
+     * 70 LEDs, which the twelve in the outline do not have to share. Scaling val
+     * into the full range first is what lets an outline run at 255 while the
+     * deck stays at the board's own limit.
+     */
+    const uint16_t base = ((uint16_t)val * 255) / RGB_MATRIX_MAXIMUM_BRIGHTNESS;
+
     const RGB probe = hsv_to_rgb((HSV){.h = hue, .s = sat, .v = 255});
     // Rec. 709 weights, x256: R 0.2126, G 0.7152, B 0.0722. Peaks at 254 for
     // white, and bottoms out at 17 for pure blue — never zero, so no guard.
     const uint8_t luma = (uint8_t)(((uint16_t)54 * probe.r + (uint16_t)183 * probe.g + (uint16_t)18 * probe.b) >> 8);
 
-    const uint16_t want = ((uint16_t)val * GLOW_REF_LUMA) / (luma ? luma : 1);
+    const uint16_t want = (base * GLOW_REF_LUMA) / (luma ? luma : 1);
     return want > 255 ? 255 : (uint8_t)want;
 }
 

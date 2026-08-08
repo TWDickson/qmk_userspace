@@ -1,0 +1,778 @@
+<title>Lulu deck renderers</title>
+<style>
+  /* Committed to a single dark world on purpose: this is a preview of a black
+     keyboard lit by LEDs. A light-mode LED preview would be a lie. Every colour
+     below is painted explicitly so the page holds on either host ground. */
+  :root {
+    --void:    #08090b;
+    --case:    #131519;
+    --case-2:  #191c21;
+    --rule:    #24272d;
+    --rule-hi: #343840;
+    --plate:   #2a2d33;
+    --cap:     #c9c4b8;
+    --ink:     #e7e4dd;
+    --muted:   #8d9098;
+    --faint:   #61656d;
+    --amber:   #e8a13a;
+    --amber-d: #8a5f1f;
+    --red:     #c0392b;
+    --blue:    #5b8fd0;
+    --peach:   #f0a878;
+
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--void);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 40px 24px 96px;
+    display: flex;
+    flex-direction: column;
+    gap: 36px;
+  }
+
+  /* ── header ─────────────────────────────────────────────────────── */
+  header { display: flex; flex-direction: column; gap: 10px; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--amber);
+  }
+
+  h1 {
+    font-family: var(--mono);
+    font-size: clamp(24px, 3.4vw, 36px);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .lede {
+    max-width: 66ch;
+    color: var(--muted);
+    margin: 0;
+  }
+  .lede strong { color: var(--ink); font-weight: 600; }
+
+  /* ── board stage ────────────────────────────────────────────────── */
+  .stage {
+    background: #050608;
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 20px 20px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .board-scroll { overflow-x: auto; }
+  canvas { display: block; width: 100%; min-width: 720px; height: auto; }
+
+  .stage-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px 24px;
+    border-top: 1px solid var(--rule);
+    padding-top: 12px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--faint);
+  }
+  .stage-bar .now { color: var(--ink); }
+  .stage-bar .now b { color: var(--amber); font-weight: 500; }
+
+  .toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    cursor: pointer;
+    color: var(--muted);
+    user-select: none;
+  }
+  .toggle input { accent-color: var(--amber); margin: 0; }
+  .toggle:hover { color: var(--ink); }
+
+  .knobs { display: flex; gap: 18px; flex-wrap: wrap; margin-left: auto; }
+  .knob { display: flex; align-items: center; gap: 8px; }
+  .knob label { color: var(--faint); }
+  .knob input[type=range] { width: 88px; accent-color: var(--amber); }
+  .knob output { color: var(--ink); min-width: 3ch; font-variant-numeric: tabular-nums; }
+
+  /* ── picker ─────────────────────────────────────────────────────── */
+  .cols { display: grid; grid-template-columns: 300px 1fr; gap: 28px; align-items: start; }
+  @media (max-width: 860px) { .cols { grid-template-columns: 1fr; } }
+
+  .group + .group { margin-top: 26px; }
+
+  .group-head {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--faint);
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 4px;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .list { display: flex; flex-direction: column; }
+
+  .item {
+    display: grid;
+    grid-template-columns: 34px 1fr auto;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    background: none;
+    border: 0;
+    border-bottom: 1px solid var(--rule);
+    padding: 11px 4px;
+    text-align: left;
+    color: var(--muted);
+    font: inherit;
+    cursor: pointer;
+    transition: color .12s, background .12s;
+  }
+  .item:hover { color: var(--ink); background: var(--case); }
+  .item:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px; }
+  .item[aria-selected="true"] { color: var(--ink); background: var(--case-2); }
+  .item[aria-selected="true"] .name { color: var(--amber); }
+
+  .sw { height: 22px; border-radius: 2px; border: 1px solid rgba(255,255,255,.1); }
+  .name { font-family: var(--mono); font-size: 13px; }
+  .tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--faint);
+    border: 1px solid var(--rule-hi);
+    border-radius: 2px;
+    padding: 2px 5px;
+    white-space: nowrap;
+  }
+  .item[aria-selected="true"] .tag { color: var(--muted); border-color: var(--muted); }
+  .tag.new { color: var(--amber-d); border-color: var(--amber-d); }
+  .tag.cut, .item[aria-selected="true"] .tag.cut { color: var(--faint); border-color: var(--rule-hi); }
+  .item[aria-selected="true"] .tag.new { color: var(--amber); border-color: var(--amber); }
+
+  /* ── detail ─────────────────────────────────────────────────────── */
+  .detail { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+
+  .detail h2 {
+    font-family: var(--mono);
+    font-size: 20px;
+    font-weight: 500;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  .detail h2 .sub { color: var(--faint); font-size: 13px; margin-left: 10px; }
+
+  .detail p { margin: 0; max-width: 68ch; }
+
+  .facts { display: flex; flex-direction: column; gap: 0; border-top: 1px solid var(--rule); }
+  .fact {
+    display: grid;
+    grid-template-columns: 128px 1fr;
+    gap: 16px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--rule);
+    align-items: baseline;
+  }
+  @media (max-width: 560px) { .fact { grid-template-columns: 1fr; gap: 2px; } }
+  .fact dt {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+  .fact dd { margin: 0; color: var(--muted); }
+  .fact dd b { color: var(--ink); font-weight: 600; }
+
+  pre {
+    margin: 0;
+    background: var(--case);
+    border: 1px solid var(--rule);
+    border-left: 2px solid var(--amber-d);
+    border-radius: 3px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.65;
+    color: var(--muted);
+  }
+  pre b { color: var(--ink); font-weight: 500; }
+  pre i { color: var(--faint); font-style: normal; }
+
+  code {
+    font-family: var(--mono);
+    font-size: 0.9em;
+    color: var(--ink);
+    background: var(--case);
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    padding: 0.5px 4px;
+  }
+
+  /* ── closing ────────────────────────────────────────────────────── */
+  .close { display: flex; flex-direction: column; gap: 14px; border-top: 1px solid var(--rule); padding-top: 28px; }
+  .close h2 { font-family: var(--mono); font-size: 15px; font-weight: 500; margin: 0; letter-spacing: 0.02em; }
+  .close ul { margin: 0; padding-left: 20px; color: var(--muted); display: flex; flex-direction: column; gap: 8px; max-width: 74ch; }
+  .close b { color: var(--ink); font-weight: 600; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">boardsource lulu &middot; 70 ws2812 &middot; rgb_theme.c</div>
+    <h1>Seven themes, five of them ours</h1>
+    <p class="lede">
+      Every look below is drawn on the board's <strong>real LED map</strong> — the 70 coordinates
+      and flags out of <code>info.json</code>, with the charcoal plate, opaque greige caps and
+      translucent amber knobs the photographs showed. Four stock-effect themes were cut and four
+      hand-written renderers took their place; what shipped is at the top, what went is below it.
+      Pick one to see it lit, and turn the knobs — hue, saturation and speed are live on all of
+      them now, and they persist.
+    </p>
+  </header>
+
+  <section class="stage">
+    <div class="board-scroll"><canvas id="board" width="1600" height="560"></canvas></div>
+    <div class="stage-bar">
+      <div class="now">showing <b id="nowName">Lulu</b></div>
+      <label class="toggle"><input type="checkbox" id="typing" checked> simulate typing</label>
+      <div class="knob"><label for="rate">rate</label><input type="range" id="rate" min="90" max="900" step="30" value="420"><output id="rateO">slow</output></div>
+      <div class="knobs">
+        <div class="knob"><label for="hue">hue</label><input type="range" id="hue" min="0" max="255" value="24"><output id="hueO">24</output></div>
+        <div class="knob"><label for="sat">sat</label><input type="range" id="sat" min="0" max="255" value="255"><output id="satO">255</output></div>
+        <div class="knob"><label for="spd">speed</label><input type="range" id="spd" min="0" max="255" value="96"><output id="spdO">96</output></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="cols">
+    <div>
+      <div class="group">
+        <div class="group-head"><span>shipping &middot; themes[]</span><span>7</span></div>
+        <div class="list" id="listNow" role="listbox" aria-label="Current themes"></div>
+      </div>
+      <div class="group">
+        <div class="group-head"><span>cut &mdash; kept for the record</span><span>4</span></div>
+        <div class="list" id="listNew" role="listbox" aria-label="Cut themes"></div>
+      </div>
+    </div>
+
+    <div class="detail">
+      <h2 id="dName">Lulu <span class="sub" id="dMode"></span></h2>
+      <p id="dBody"></p>
+      <dl class="facts" id="dFacts"></dl>
+      <pre id="dCode"></pre>
+    </div>
+  </div>
+
+  <section class="close">
+    <h2>Where it landed</h2>
+    <ul>
+      <li><b>Five of the seven are drawn in the indicator hook</b>, on a <code>SOLID_COLOR</code>
+        base coat. <code>ALPHAS_MODS</code> is the one stock effect kept, because
+        <code>LED_FLAG_MODIFIER</code> here is exactly the outer pinky column plus the four
+        thumbs — the eight keys a half that carry the red Escape, the blue LWR and the peach RSE.
+        Its geometry is a fact about the hardware, not about the coordinate system.</li>
+      <li><b>The other five stock animations are <code>#undef</code>'d</b> in the keymap's
+        <code>config.h</code>, which needs no <code>post_config.h</code> because the generated
+        <code>info_config.h</code> is included first. A
+        <code>_Static_assert(RGB_MATRIX_EFFECT_MAX == 3)</code> guards it, since undefining
+        someone else's define otherwise fails silently.</li>
+      <li><b>Net &minus;152 bytes</b>, four new renderers included. Dropping the stock effects
+        paid for them.</li>
+      <li><b>The knobs are live and now persist.</b> Every renderer reads
+        <code>rgb_matrix_get_hue()</code> and friends rather than the theme table, so a theme is a
+        starting point rather than a cage — and <code>THEME_NEXT</code> writes it to EEPROM, so
+        your adjusted version is what comes back after a reboot.</li>
+      <li><b>Holding both thumbs swaps the starfield for a config readout</b> — theme name, four
+        knob bars, MAC/WIN and BASE/GAME. Bars rather than numbers because the OLED font is A-Z
+        with no digits, and <code>draw_text()</code> indexes it with <code>c - 'A'</code>.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+"use strict";
+
+/* ── the board, from info.json ─────────────────────────────────────────────
+   LED map: [flags, x, y, row, col]  — flags 1 MODIFIER, 2 UNDERGLOW, 4 KEYLIGHT
+   x runs 0..224 across BOTH halves, y 0..64 top row to thumbs.              */
+const U = 2, M = 1, K = 4;
+const LEDS = [
+  [U,86,55],[U,51,55],[U,17,40],[U,17,10],[U,51,10],[U,86,10],
+  [K,86,0,0,5],[K,68,0,0,4],[K,51,0,0,3],[K,34,0,0,2],[K,17,0,0,1],[M,0,0,0,0],
+  [M,0,16,1,0],[K,17,16,1,1],[K,34,16,1,2],[K,51,16,1,3],[K,68,16,1,4],[K,86,16,1,5],
+  [K,86,32,2,5],[K,68,32,2,4],[K,51,32,2,3],[K,34,32,2,2],[K,17,32,2,1],[M,0,32,2,0],
+  [M,0,48,3,0],[K,17,48,3,1],[K,34,48,3,2],[K,51,48,3,3],[K,68,48,3,4],[K,86,48,3,5],
+  [K,103,40,4,5],[M,96,64,4,4],[M,77,64,4,3],[M,60,64,4,2],[M,43,64,4,1],
+  [U,137,55],[U,172,55],[U,206,40],[U,206,10],[U,172,10],[U,137,10],
+  [K,137,0,5,5],[K,155,0,5,4],[K,172,0,5,3],[K,189,0,5,2],[K,206,0,5,1],[M,224,0,5,0],
+  [M,224,16,6,0],[K,206,16,6,1],[K,189,16,6,2],[K,172,16,6,3],[K,155,16,6,4],[K,137,16,6,5],
+  [K,137,32,7,5],[K,155,32,7,4],[K,172,32,7,3],[K,189,32,7,2],[K,206,32,7,1],[M,224,32,7,0],
+  [M,224,48,8,0],[K,206,48,8,1],[K,189,48,8,2],[K,172,48,8,3],[K,155,48,8,4],[K,137,48,8,5],
+  [K,120,40,9,5],[M,127,64,9,4],[M,146,64,9,3],[M,163,64,9,2],[M,180,64,9,1]
+];
+
+/* Physical key positions, in key units, from layouts.LAYOUT — these carry the
+   column stagger and thumb splay that the LED map flattens away. */
+const KEYS = [
+  [0,0,0,0.5,"ESC"],[0,1,1,0.375,"1"],[0,2,2,0.125,"2"],[0,3,3,0,"3"],[0,4,4,0.125,"4"],[0,5,5,0.25,"5"],
+  [5,5,10.5,0.25,"6"],[5,4,11.5,0.125,"7"],[5,3,12.5,0,"8"],[5,2,13.5,0.125,"9"],[5,1,14.5,0.375,"0"],[5,0,15.5,0.5,"-"],
+  [1,0,0,1.5,"TAB"],[1,1,1,1.375,"Q"],[1,2,2,1.125,"W"],[1,3,3,1,"E"],[1,4,4,1.125,"R"],[1,5,5,1.25,"T"],
+  [6,5,10.5,1.25,"Y"],[6,4,11.5,1.125,"U"],[6,3,12.5,1,"I"],[6,2,13.5,1.125,"O"],[6,1,14.5,1.375,"P"],[6,0,15.5,1.5,"="],
+  [2,0,0,2.5,"CTL"],[2,1,1,2.375,"A"],[2,2,2,2.125,"S"],[2,3,3,2,"D"],[2,4,4,2.125,"F"],[2,5,5,2.25,"G"],
+  [7,5,10.5,2.25,"H"],[7,4,11.5,2.125,"J"],[7,3,12.5,2,"K"],[7,2,13.5,2.125,"L"],[7,1,14.5,2.375,";"],[7,0,15.5,2.5,"'"],
+  [3,0,0,3.5,"SFT"],[3,1,1,3.375,"Z"],[3,2,2,3.125,"X"],[3,3,3,3,"C"],[3,4,4,3.125,"V"],[3,5,5,3.25,"B"],
+  [4,5,6,2.75,"◉"],[9,5,9.5,2.75,"◉"],
+  [8,5,10.5,3.25,"N"],[8,4,11.5,3.125,"M"],[8,3,12.5,3,","],[8,2,13.5,3.125,"."],[8,1,14.5,3.375,"/"],[8,0,15.5,3.5,"SFT"],
+  [4,1,2.5,4.125,"GUI"],[4,2,3.5,4.15,"ALT"],[4,3,4.5,4.25,"LWR"],[4,4,6,4.25,"SPC",1.5],
+  [9,4,9.5,4.25,"ENT",1.5],[9,3,11,4.25,"RSE"],[9,2,12,4.15,"BSP"],[9,1,13,4.15,"GUI"]
+];
+
+/* The three coloured caps and the two knobs, by matrix position. */
+const CAPCOL = { "0,0":"#c0392b", "4,3":"#5b8fd0", "9,3":"#f0a878" };
+const KNOBS  = new Set(["4,5","9,5"]);
+
+const ledAt = new Map();
+LEDS.forEach((l,i) => { if (l.length > 3) ledAt.set(l[3]+","+l[4], i); });
+
+/* ── colour ────────────────────────────────────────────────────────────────
+   QMK hue is 0..255 across the whole wheel; hsv_to_rgb picks a sextant with
+   h * 6 / 255. Standard HSV over 0..255 is the same curve.                  */
+function hsv(h, s, v) {
+  h = ((h % 256) + 256) % 256;
+  const C = (v / 255) * (s / 255);
+  const hp = (h / 255) * 6;
+  const X = C * (1 - Math.abs((hp % 2) - 1));
+  let r = 0, g = 0, b = 0;
+  if      (hp < 1) { r = C; g = X; }
+  else if (hp < 2) { r = X; g = C; }
+  else if (hp < 3) { g = C; b = X; }
+  else if (hp < 4) { g = X; b = C; }
+  else if (hp < 5) { r = X; b = C; }
+  else             { r = C; b = X; }
+  const m = v / 255 - C;
+  return [(r + m) * 255, (g + m) * 255, (b + m) * 255];
+}
+const scale8  = (a, b) => (a * b) >> 8;
+const qadd8   = (a, b) => Math.min(255, a + b);
+const sin8    = x => 128 + 127 * Math.sin((x / 256) * Math.PI * 2);
+
+/* Mirrors glow_value() in rgb_theme.c. The outline does not share the deck's
+   150-LED power budget, so val is scaled into the full range first; then each
+   hue is solved for the value matching plain white at the deck's own ceiling,
+   because apparent brightness is val weighted by what the eye can see. */
+const GLOW_REF = 150, MAXB = 150;
+function glowValue(h, s, val) {
+  const base = Math.min(255, (val * 255 / MAXB) | 0);
+  const p = hsv(h, s, 255);
+  const luma = (54 * p[0] + 183 * p[1] + 18 * p[2]) >> 8;
+  return Math.min(255, (base * GLOW_REF / Math.max(luma, 1)) | 0);
+}
+
+/* ── the renderers ─────────────────────────────────────────────────────────
+   Each returns [r,g,b] per LED index. `p` carries live hue/sat/speed and the
+   simulated hit tracker, exactly as the firmware's would.                    */
+const VAL = 190;
+
+function baseHSV(p, i) { return hsv(p.hue, p.sat, VAL); }
+
+// The underglow is overwritten every frame by the indicator hook, at the
+// theme's own hue and its normalised value — never by the deck renderer.
+function glowRGB(t) { return hsv(t.glow, t.glowSat, glowValue(t.glow, t.glowSat, VAL)); }
+
+const R = {
+  ALPHAS_MODS(p, i) {
+    const mod = (LEDS[i][0] & M) !== 0;
+    return hsv(p.hue + (mod ? p.speed : 0), p.sat, VAL);
+  },
+  GRADIENT_UP_DOWN(p, i) {
+    return hsv(p.hue + scale8(64, p.speed) * (LEDS[i][2] >> 4), p.sat, VAL);
+  },
+  GRADIENT_LEFT_RIGHT(p, i) {
+    return hsv(p.hue + ((scale8(64, p.speed) * LEDS[i][1]) >> 5), p.sat, VAL);
+  },
+  BAND_SAT(p, i) {
+    const t = (scale8(p.t / 4 | 0, p.speed / 4 + 1 | 0)) & 255;
+    let s = p.sat - Math.abs(scale8(LEDS[i][1], 228) + 28 - t) * 8;
+    return hsv(p.hue, scale8(s < 0 ? 0 : s, p.sat), VAL);
+  },
+  SOLID(p, i) { return baseHSV(p, i); },
+
+  /* SOLID_COLOR base coat with the ripples added on top — what ships today. */
+  SPLASH(p, i, one) {
+    const L = LEDS[i];
+    if (L[0] & U) return baseHSV(p, i);
+    let ripple = 0;
+    const hits = one ? p.hits.slice(-1) : p.hits;
+    for (const h of hits) {
+      const dx = L[1] - h.x, dy = L[2] - h.y;
+      const dist = Math.sqrt(dx * dx + dy * dy) | 0;
+      const tick = (h.age * (p.speed + 1)) >> 8;
+      const eff = tick - dist;
+      ripple = qadd8(ripple, eff > 255 || eff < 0 ? 0 : 255 - eff);
+    }
+    return hsv(p.hue, p.sat, qadd8(VAL, ripple));
+  },
+
+  /* ── the four that replaced the stock-effect themes ───────────────────── */
+
+  /* Hue ramps outward from each half's inner edge, mirrored, so the two hands
+     are identical. GRADIENT_LEFT_RIGHT runs monotonically across the pair and
+     makes the left hand a different colour from the right. */
+  MIRROR(p, i) {
+    const x = LEDS[i][1];
+    const d = x <= 110 ? 103 - x : x - 120;          // firmware: distance from the inner edge
+    return hsv(p.hue + ((p.speed * d) / 104 | 0), p.sat, VAL);
+  },
+
+  /* Colour by finger, not by geometry. Column 0-1 is the pinky and its outer
+     reach, 2-3 ring and middle, 4-5 index and its stretch; the thumbs take the
+     far end. Dead still, and it is the only look that says anything about how
+     the board is actually used. */
+  ZONES(p, i) {
+    const L = LEDS[i];
+    if (L[0] & U) return baseHSV(p, i);
+    const row = L[3], col = L[4];
+    const thumb = row === 4 || row === 9;
+    const zone = thumb ? 3 : col <= 1 ? 0 : col <= 3 ? 1 : 2;
+    const step = p.speed / 4 | 0;                     // firmware: rgb_matrix_get_speed() / 4
+    return hsv(p.hue + zone * step, p.sat, VAL);
+  },
+
+  /* Per-key afterglow. Each key flares on the strike and decays back to the
+     resting deck over about a second — a trail of where you have been rather
+     than a ring expanding away from it. Stock TYPING_HEATMAP is the closest
+     thing and it hard-codes a blue-to-red ramp that ignores the theme hue
+     entirely, and rests at black. */
+  TRAIL(p, i) {
+    const L = LEDS[i];
+    if (L[0] & U) return baseHSV(p, i);
+    let heat = 0;
+    for (const h of p.hits) {                          // firmware walks the hits, not the LEDs
+      if (h.led !== i) continue;
+      const age = (h.age * (p.speed + 1)) >> 8;        // scale16by8(tick, qadd8(speed,1))
+      if (age < 255) heat = 255 - age;                 // forward order: newest hit wins
+    }
+    return hsv(p.hue, p.sat, qadd8(VAL, heat));
+  },
+
+  /* Deck held flat, the outline breathes. Stock BREATHING takes the whole
+     board including the deck to black at the trough; this cannot, because
+     rgb_theme.c already owns the underglow separately. */
+  PULSE(p, i) {
+    if (!(LEDS[i][0] & U)) return baseHSV(p, i);       // deck stays flat
+    // firmware: scale8(val, abs8(sin8(scale16by8(timer, speed/8 + 1)) - 128) * 2)
+    const ph = ((p.t * ((p.speed / 8 | 0) + 1)) >> 8) & 255;
+    const b = Math.min(255, Math.abs(sin8(ph) - 128) * 2);
+    return hsv(p.hue, p.sat, scale8(VAL, b));
+  }
+};
+
+/* ── the catalogue ─────────────────────────────────────────────────────── */
+const THEMES = [
+  { id:"lulu",  name:"Lulu",  group:"now", tag:"ours",     mode:"SOLID_COLOR + ripples",
+    hue:24, sat:255, speed:96, glow:12, glowSat: 255, knob:28, knobSat:180,
+    fn:(p,i)=>R.SPLASH(p,i,false),
+    body:"The board's own colours. A flat amber deck with every keystroke sending a ring out from under the cap that was struck, drawn by splash_overlay() rather than by SOLID_MULTISPLASH — because that effect, and every other stock reactive one, rests at black.",
+    facts:[["Drawn by","<b>us</b> — 20 lines in the indicator hook"],["Stock equivalent","SOLID_MULTISPLASH, which rests dark"],["Knobs","hue, sat and speed all live"]],
+    code:"<i>// core's SOLID_COLOR lays the resting deck; we add to it</i>\nfor (j = first; j &lt; g_last_hit_tracker.count; j++) {\n    dist   = <b>sqrt16</b>(dx*dx + dy*dy);\n    tick   = <b>scale16by8</b>(hit.tick[j], qadd8(speed, 1));\n    ripple = <b>qadd8</b>(ripple, 255 - (tick - dist));\n}\nv = <b>qadd8</b>(resting_val, ripple);   <i>// upstream: scale8(ripple, v)</i>" },
+
+  { id:"rose",  name:"Rose",  group:"now", tag:"stock", mode:"ALPHAS_MODS",
+    hue:240, sat:239, speed:20, glow:240, glowSat: 255, knob:24, knobSat:180, fn:R.ALPHAS_MODS,
+    body:"Rose alphas, red mods. The one stock effect that knows what a keyboard is: LED_FLAG_MODIFIER on this board is exactly the outer pinky column plus the four thumbs, which is where every coloured cap sits. speed is the hue offset between the two groups — 240 + 20 wraps to 4, putting red under the red Escape.",
+    facts:[["Drawn by","QMK — <code>alpha_mods_anim.h</code>, 12 lines"],["Worth keeping","<b>yes</b> — the split is a hardware fact"],["speed means","alpha/mod hue offset, not a rate"]],
+    code:"<i>// alpha_mods_anim.h — the whole effect</i>\nrgb1 = hsv_to_rgb(hsv);\nhsv.h += rgb_matrix_config.<b>speed</b>;\nrgb2 = hsv_to_rgb(hsv);\nfor (i...) HAS_FLAGS(flags[i], <b>LED_FLAG_MODIFIER</b>)\n             ? set(i, rgb2) : set(i, rgb1);" },
+
+  { id:"mono",  name:"Mono",  group:"now", tag:"stock", mode:"ALPHAS_MODS",
+    hue:30, sat:48, speed:128, glow:0, glowSat: 0, knob:30, knobSat:0, fn:R.ALPHAS_MODS,
+    body:"Warm white on the alphas, cool white on the mods, 48 saturation apart — enough to see the outer column and the thumbs as a block, not enough to read as a colour. This is the one where the charcoal plate matters most: desaturated light on charcoal is the hardest thing on the board to see, and it may turn out to read as nothing at all.",
+    facts:[["Drawn by","QMK — same effect as Rose"],["Risk","<b>untested on hardware</b> — 48 sat may vanish"],["Knobs","raise sat if the split does not read"]],
+    code:"<i>// if the split is invisible, this is the knob</i>\n.hue = 30, .sat = <b>48</b>, .speed = 128\n<i>//                    ^ try 70-90</i>" },
+
+  { id:"mirror", name:"Fold", group:"now", tag:"ours", mode:"custom",
+    hue:170, sat:255, speed:64, glow:202, glowSat: 190, knob:28, knobSat:180, fn:R.MIRROR,
+    body:"Hue ramps outward from each half's inner edge, mirrored, so both hands are identical and the colour follows the reach of your fingers rather than a line drawn across the desk. This is Split done properly: no amount of tuning makes GRADIENT_LEFT_RIGHT symmetric, because nothing in it folds the x axis. Called Fold rather than Mirror because the OLED config panel caps a theme name at five glyphs.",
+    facts:[["Drawn by","<b>us</b> — about 6 lines"],["Fixes","Split's mismatched hands"],["Replaced","GRADIENT_LEFT_RIGHT"],["speed means","hue span, inner edge to pinkies"]],
+    code:"<i>// fold x about the gap, then ramp outward</i>\nconst uint8_t x = g_led_config.point[i].x;\nconst uint8_t d = x &lt;= 110 ? <b>103 - x</b>       <i>// left, inner-out</i>\n                            : <b>x - 120</b>;      <i>// right, inner-out</i>\nhsv.h = hue + scale8(d, span);" },
+
+  { id:"zones", name:"Zones", group:"now", tag:"ours", mode:"custom",
+    hue:85, sat:255, speed:60, glow:107, glowSat: 255, knob:26, knobSat:180, fn:R.ZONES,
+    body:"Colour by finger instead of by geometry: pinky and its outer reach, ring and middle, index and its stretch, then the thumbs. Completely still, and the only look on the page that encodes something true about how the board is used rather than where the LEDs happen to sit. Stock has nothing like it — every built-in effect is a function of x, y or time.",
+    facts:[["Drawn by","<b>us</b> — about 8 lines"],["Uses","the matrix column, not the LED position"],["Stock equivalent","<b>none</b>"],["Movement","none at all"]],
+    code:"<i>// the matrix column is the finger; the LED map has no idea</i>\nconst uint8_t col = <b>g_led_config</b> ... <i>// reverse lookup, or</i>\n<i>// walk matrix_co[][] once at init into a zone[70] table</i>\nzone = thumb ? 3 : col &lt;= 1 ? 0 : col &lt;= 3 ? 1 : 2;\nhsv.h = hue + zone * step;" },
+
+  { id:"trail", name:"Trail", group:"now", tag:"ours", mode:"custom",
+    hue:205, sat:255, speed:96, glow:205, glowSat: 190, knob:28, knobSat:180, fn:R.TRAIL,
+    body:"Each key flares on the strike and decays back to the resting deck over about a second. A trail of where you have been rather than a ring expanding away from it, and much quieter than a splash while still being alive under the hands. The closest stock effect is TYPING_HEATMAP, which hard-codes a blue-to-red ramp, ignores the theme hue completely, needs a framebuffer in RAM, and rests at black.",
+    facts:[["Drawn by","<b>us</b> — about 12 lines"],["Reuses","<code>g_last_hit_tracker</code>, already compiled"],["Stock equivalent","TYPING_HEATMAP — wrong hue, rests dark"],["Extra RAM","<b>none</b> — unlike the heatmap"]],
+    code:"<i>// the hit tracker already stores which LED was struck</i>\nfor (j = 0; j &lt; g_last_hit_tracker.count; j++) {\n    if (g_last_hit_tracker.<b>index[j]</b> != i) continue;\n    age  = scale16by8(hit.tick[j], qadd8(speed, 1));\n    heat = qsub8(255, age &gt; 255 ? 255 : age);\n}\nv = qadd8(resting_val, heat);" },
+
+  { id:"pulse", name:"Pulse", group:"now", tag:"ours", mode:"custom",
+    hue:128, sat:255, speed:70, glow:128, glowSat: 255, knob:24, knobSat:200, fn:R.PULSE,
+    body:"The deck held perfectly flat while the outline breathes. Only possible because rgb_theme.c already overwrites every underglow LED every frame — no stock effect can move one group and not the other. The calmest thing on the page, and the one that makes the most of the fact that the underglow is a neon line against a black case rather than a wash.",
+    facts:[["Drawn by","<b>us</b> — about 4 lines"],["Uses","the underglow override that already exists"],["Stock equivalent","<b>none</b> — BREATHING moves everything"],["Deck","never changes, never goes dark"]],
+    code:"<i>// the underglow block in the indicator hook already runs</i>\n<i>// every frame; this is the entire change</i>\nuint8_t b = <b>abs8</b>(sin8(scale16by8(g_rgb_timer, speed/8)) - 128) * 2;\nglow = hsv_to_rgb((HSV){ glow_hue, glow_sat, <b>scale8</b>(val, b) });" },
+
+  { id:"deep",  name:"Deep",  group:"cut", tag:"cut", mode:"SOLID_COLOR + ripple",
+    hue:170, sat:255, speed:96, glow:150, glowSat: 255, knob:24, knobSat:200,
+    fn:(p,i)=>R.SPLASH(p,i,true),
+    body:"The quieter reactive theme: one ring at a time, so each keystroke cancels the last instead of stacking. The knobs are the only warm thing on it — two amber lamps on a cold board, which is the whole reason to hold them separately from the deck.",
+    facts:[["Cut because","Trail is the quieter reactive theme"],["Was","SOLID_COLOR + SPLASH_ONE"],["Gone with it","the SPLASH_ONE branch"]],
+    code:"<i>// the only difference from Lulu</i>\nfirst = splash == <b>SPLASH_ONE</b>\n      ? qsub8(count, 1)   <i>// newest hit only</i>\n      : 0;                <i>// every live hit</i>" },
+
+  { id:"ember", name:"Ember", group:"cut", tag:"cut", mode:"GRADIENT_UP_DOWN",
+    hue:4, sat:255, speed:28, glow:0, glowSat: 255, knob:32, knobSat:170, fn:R.GRADIENT_UP_DOWN,
+    body:"Deep red at the number row easing to amber under the thumbs. Four discrete bands, not a gradient — the effect quantises y to 16-pixel rows, so on a five-row board you get five flat stripes. It also reads speed as a hue span: it was 64, which put the thumb row on chartreuse.",
+    facts:[["Cut because","it is <b>five flat stripes</b>, not a gradient"],["Why","quantised to <code>y &gt;&gt; 4</code>; rows sit at 0/16/32/48/64"],["Effect","<code>GRADIENT_UP_DOWN</code>, now #undef'd"]],
+    code:"<i>// gradient_up_down_anim.h</i>\nscale = scale8(64, speed);\nhsv.h = base + scale * (point[i].y <b>&gt;&gt; 4</b>);\n<i>// y is 0,16,32,48,64 -> five values. Not a ramp.</i>" },
+
+  { id:"split", name:"Split", group:"cut", tag:"cut", mode:"GRADIENT_LEFT_RIGHT",
+    hue:160, sat:255, speed:32, glow:188, glowSat: 255, knob:28, knobSat:180, fn:R.GRADIENT_LEFT_RIGHT,
+    body:"One gradient laid across both halves, because the LED map's x axis runs 0-224 over the pair. Which is also the problem: it runs monotonically, so your left hand is blue and your right hand is violet. On a symmetric board that reads as unbalanced rather than as a gradient, and it is the strongest candidate for replacement by MIRROR.",
+    facts:[["Cut because","<b>asymmetric</b> — the two hands differ"],["Replaced by","<b>Fold</b>, which folds the x axis"],["Effect","<code>GRADIENT_LEFT_RIGHT</code>, now #undef'd"]],
+    code:"<i>// gradient_left_right_anim.h</i>\nhsv.h = base + (scale * point[i].<b>x</b> &gt;&gt; 5);\n<i>// x: 0..103 left half, 120..224 right.</i>\n<i>// Nothing folds it — the hands cannot match.</i>" },
+
+  { id:"sweep", name:"Sweep", group:"cut", tag:"cut", mode:"BAND_SAT",
+    hue:140, sat:255, speed:40, glow:140, glowSat: 255, knob:24, knobSat:200, fn:R.BAND_SAT,
+    body:"A saturated band travelling left hand to right over a pale deck. It bands saturation rather than value, which is why it can move without ever going dark — BREATHING and BAND_VAL both take the deck to black at the trough. Whether constant movement on a keyboard you are trying to type on is wanted is the real question.",
+    facts:[["Cut because","it never stops moving"],["Fair point","it never went dark either — value untouched"],["Effect","<code>BAND_SAT</code>, now #undef'd"]],
+    code:"<i>// colorband_sat_anim.h</i>\ns = hsv.s - abs(scale8(point[i].x, 228) + 28 - time) * 8;\nhsv.s = scale8(s &lt; 0 ? 0 : s, hsv.s);\n<i>// hsv.v is never touched -> always lit</i>" },
+];
+
+/* ── simulated typing ──────────────────────────────────────────────────── */
+const TYPE_ORDER = [];
+LEDS.forEach((l, i) => { if (!(l[0] & U)) TYPE_ORDER.push(i); });
+
+const state = {
+  sel: THEMES[0],
+  hue: 24, sat: 255, speed: 96,
+  t: 0, hits: [], typing: true, lastHit: 0, wpmGap: 420
+};
+
+function pushHit() {
+  const i = TYPE_ORDER[(Math.random() * TYPE_ORDER.length) | 0];
+  state.hits.push({ led: i, x: LEDS[i][1], y: LEDS[i][2], age: 0 });
+  if (state.hits.length > 8) state.hits.shift();
+}
+
+/* ── drawing ───────────────────────────────────────────────────────────── */
+const cv = document.getElementById("board");
+const cx = cv.getContext("2d");
+const SC = 88;               // px per key unit
+const OX = 46, OY = 40;
+const kx = x => OX + x * SC;
+const ky = y => OY + y * SC;
+
+/* Underglow LEDs have no key; map their LED coords back into key space with
+   the per-half transform (17.2 px/unit left, 17.4 with a 45.7 offset right). */
+function glowPos(L) {
+  const x = L[1] <= 110 ? L[1] / 17.2 : (L[1] + 45.7) / 17.4;
+  return [kx(x), ky(L[2] / 15.5 + 0.35)];
+}
+
+function rr(x, y, w, h, r) {
+  cx.beginPath();
+  cx.moveTo(x + r, y); cx.arcTo(x + w, y, x + w, y + h, r);
+  cx.arcTo(x + w, y + h, x, y + h, r); cx.arcTo(x, y + h, x, y, r);
+  cx.arcTo(x, y, x + w, y, r); cx.closePath();
+}
+
+function draw() {
+  const p = { hue: state.hue, sat: state.sat, speed: state.speed, t: state.t, hits: state.hits };
+  const col = LEDS.map((_, i) => state.sel.fn(p, i));
+
+  cx.fillStyle = "#050608";
+  cx.fillRect(0, 0, cv.width, cv.height);
+
+  // plate slabs
+  cx.fillStyle = "#2a2d33";
+  rr(kx(-0.45), ky(-0.45), SC * 7.05, SC * 5.3, 16); cx.fill();
+  rr(kx(8.9),   ky(-0.45), SC * 7.05, SC * 5.3, 16); cx.fill();
+
+  // underglow: a thin neon line escaping under each plate
+  cx.save();
+  cx.globalCompositeOperation = "lighter";
+  LEDS.forEach((L, i) => {
+    if (!(L[0] & U)) return;
+    const [gx, gy] = glowPos(L);
+    const [r, g, b] = glowRGB(state.sel);
+    const grd = cx.createRadialGradient(gx, gy, 0, gx, gy, SC * 2.2);
+    grd.addColorStop(0, `rgba(${r|0},${g|0},${b|0},0.85)`);
+    grd.addColorStop(1, `rgba(${r|0},${g|0},${b|0},0)`);
+    cx.fillStyle = grd;
+    cx.fillRect(gx - SC * 2.2, gy - SC * 2.2, SC * 4.4, SC * 4.4);
+  });
+  cx.restore();
+
+  // plate wash from the keylight LEDs, additive
+  cx.save();
+  cx.globalCompositeOperation = "lighter";
+  KEYS.forEach(K => {
+    const i = ledAt.get(K[0] + "," + K[1]);
+    if (i === undefined || (LEDS[i][0] & U)) return;
+    const [r, g, b] = col[i];
+    const cxp = kx(K[2]) + SC * 0.45, cyp = ky(K[3]) + SC * 0.45;
+    const grd = cx.createRadialGradient(cxp, cyp, 0, cxp, cyp, SC * 0.95);
+    grd.addColorStop(0, `rgba(${r|0},${g|0},${b|0},0.55)`);
+    grd.addColorStop(1, `rgba(${r|0},${g|0},${b|0},0)`);
+    cx.fillStyle = grd;
+    cx.fillRect(cxp - SC, cyp - SC, SC * 2, SC * 2);
+  });
+  cx.restore();
+
+  // caps
+  cx.textAlign = "center";
+  cx.textBaseline = "middle";
+  KEYS.forEach(K => {
+    const key = K[0] + "," + K[1];
+    const i = ledAt.get(key);
+    const [r, g, b] = i !== undefined ? col[i] : [0, 0, 0];
+    const h = (K[5] || 1);
+    const x = kx(K[2]) + SC * 0.06, y = ky(K[3]) + SC * 0.06;
+    const w = SC * 0.88, hh = SC * 0.88 * h;
+
+    if (KNOBS.has(key)) {
+      // translucent amber knob: the LED shows through, multiplied by amber
+      const cxp = x + w / 2, cyp = y + hh / 2;
+      cx.fillStyle = "#3a2a18";
+      rr(x, y, w, hh, 5); cx.fill();
+      const lit = [Math.min(255, r * 1.0 + 40), Math.min(255, g * 0.62 + 22), Math.min(255, b * 0.18)];
+      const grd = cx.createRadialGradient(cxp, cyp - 3, 1, cxp, cyp, w * 0.42);
+      grd.addColorStop(0, `rgb(${lit[0]|0},${lit[1]|0},${lit[2]|0})`);
+      grd.addColorStop(1, `rgba(${lit[0]*0.45|0},${lit[1]*0.45|0},${lit[2]*0.45|0},1)`);
+      cx.fillStyle = grd;
+      cx.beginPath(); cx.arc(cxp, cyp, w * 0.40, 0, 7); cx.fill();
+      return;
+    }
+
+    // opaque cap: takes a light tint of whatever is washing the plate under it
+    const base = CAPCOL[key] || "#c9c4b8";
+    const bi = parseInt(base.slice(1), 16);
+    const mix = 0.22;
+    const cr = ((bi >> 16) & 255) * (1 - mix) + r * mix;
+    const cg = ((bi >> 8) & 255) * (1 - mix) + g * mix;
+    const cb = (bi & 255) * (1 - mix) + b * mix;
+    cx.fillStyle = `rgb(${cr|0},${cg|0},${cb|0})`;
+    rr(x, y, w, hh, 6); cx.fill();
+    // the lit rim where the plate glow catches the cap's lower edge
+    cx.fillStyle = `rgba(${r|0},${g|0},${b|0},0.30)`;
+    rr(x, y + hh - SC * 0.16, w, SC * 0.16, 6); cx.fill();
+
+    cx.fillStyle = "rgba(28,30,34,0.86)";
+    cx.font = `500 ${K[4].length > 2 ? 15 : 20}px ui-monospace, Menlo, monospace`;
+    cx.fillText(K[4], x + w / 2, y + hh / 2 + 1);
+  });
+}
+
+/* ── loop ──────────────────────────────────────────────────────────────── */
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let prev = performance.now();
+
+function frame(now) {
+  const dt = Math.min(64, now - prev); prev = now;
+  state.t += dt;
+  for (const h of state.hits) h.age += dt;
+  state.hits = state.hits.filter(h => h.age < 4000);
+  if (state.typing && !reduce && state.t - state.lastHit > state.wpmGap) {
+    state.lastHit = state.t; pushHit();
+  }
+  draw();
+  requestAnimationFrame(frame);
+}
+
+/* ── wiring ────────────────────────────────────────────────────────────── */
+function chip(t) {
+  const [r, g, b] = hsv(t.hue, t.sat, 210);
+  const [gr, gg, gb] = hsv(t.glow, 255, 210);
+  return `linear-gradient(100deg, rgb(${r|0},${g|0},${b|0}) 0 62%, rgb(${gr|0},${gg|0},${gb|0}) 62% 100%)`;
+}
+
+function buildList(el, group) {
+  THEMES.filter(t => t.group === group).forEach(t => {
+    const b = document.createElement("button");
+    b.className = "item";
+    b.setAttribute("role", "option");
+    b.dataset.id = t.id;
+    b.innerHTML = `<span class="sw" style="background:${chip(t)}"></span>` +
+                  `<span class="name">${t.name}</span>` +
+                  `<span class="tag${t.tag === "cut" ? " cut" : t.tag === "ours" ? " new" : ""}">${t.tag}</span>`;
+    b.addEventListener("click", () => select(t));
+    el.appendChild(b);
+  });
+}
+
+function select(t) {
+  state.sel = t;
+  state.hue = t.hue; state.sat = t.sat; state.speed = t.speed;
+  hueEl.value = t.hue; satEl.value = t.sat; spdEl.value = t.speed;
+  syncKnobs();
+
+  document.querySelectorAll(".item").forEach(el =>
+    el.setAttribute("aria-selected", el.dataset.id === t.id ? "true" : "false"));
+
+  document.getElementById("nowName").textContent = t.name;
+  document.getElementById("dName").innerHTML = `${t.name} <span class="sub">${t.mode}</span>`;
+  document.getElementById("dBody").textContent = t.body;
+  document.getElementById("dCode").innerHTML = t.code;
+  document.getElementById("dFacts").innerHTML =
+    t.facts.map(([k, v]) => `<div class="fact"><dt>${k}</dt><dd>${v}</dd></div>`).join("");
+}
+
+const hueEl = document.getElementById("hue");
+const satEl = document.getElementById("sat");
+const spdEl = document.getElementById("spd");
+
+function syncKnobs() {
+  document.getElementById("hueO").textContent = hueEl.value;
+  document.getElementById("satO").textContent = satEl.value;
+  document.getElementById("spdO").textContent = spdEl.value;
+}
+
+hueEl.addEventListener("input", () => { state.hue = +hueEl.value; syncKnobs(); });
+satEl.addEventListener("input", () => { state.sat = +satEl.value; syncKnobs(); });
+spdEl.addEventListener("input", () => { state.speed = +spdEl.value; syncKnobs(); });
+document.getElementById("typing").addEventListener("change", e => { state.typing = e.target.checked; });
+const rateEl = document.getElementById("rate");
+rateEl.addEventListener("input", () => {
+  state.wpmGap = 990 - +rateEl.value;   // slider right = faster
+  document.getElementById("rateO").textContent =
+    state.wpmGap > 600 ? "slow" : state.wpmGap > 300 ? "typing" : "fast";
+});
+rateEl.value = 990 - 420;
+
+buildList(document.getElementById("listNow"), "now");
+buildList(document.getElementById("listNew"), "cut");
+select(THEMES[0]);
+requestAnimationFrame(frame);
+</script>

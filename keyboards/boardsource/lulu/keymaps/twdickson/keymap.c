@@ -382,6 +382,7 @@ static void rgb_fade_task(void) {
 void housekeeping_task_user(void) {
 #ifdef RGB_MATRIX_ENABLE
     rgb_fade_task();
+    rgb_theme_sync_task();
 #endif
 }
 
