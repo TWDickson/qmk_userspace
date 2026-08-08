@@ -173,25 +173,50 @@ static void theme_load(theme_t *out) {
     memcpy_P(out, &themes[i], sizeof(*out));
 }
 
-/* Brightness is deliberately not part of the theme. It is a room-lighting
- * preference rather than a palette choice, so the EEPROM value survives a theme
- * change and a reboot, and only hue/sat/mode get rewritten.
+/* A theme *seeds* the lighting; it does not own it.
  *
- * All three writes are _noeeprom: the theme index is the one thing persisted,
- * and re-deriving the rest from it every boot is what keeps this off the
- * EEPROM's write budget.
+ * These writes are the EEPROM ones, not the _noeeprom ones, and rgb_theme_init()
+ * deliberately does not call this. That is what makes RM_HUEU, RM_SATD and
+ * RM_SPDU worth having: picking a theme lays down its hue, saturation, speed and
+ * mode, the knobs adjust from there, and QMK persists both the same way — so the
+ * board comes back up looking like the version of the theme you actually dialled
+ * in rather than snapping back to the table.
+ *
+ * This inverts what the file used to do, which was to re-apply the table at
+ * every boot with the _noeeprom setters. That kept the theme index as the single
+ * persisted byte, and it also meant every adjustment was silently discarded on
+ * the next power cycle — a knob that appeared to work and did not. The write
+ * budget is unaffected either way: the writes happen on THEME_NEXT and on the
+ * adjustment keycodes, which is exactly where they happened before.
+ *
+ * Brightness is still not part of a theme — it is a room-lighting preference,
+ * not a palette choice — so it is carried through rather than set, and
+ * RM_VALU/RM_VALD own it alone. rgb_theme_user_val() rather than
+ * rgb_matrix_get_val() because the idle ramp drives the live value and a theme
+ * change during the fade would otherwise persist a half-dimmed board.
  */
 static void theme_apply(void) {
     theme_t t;
     theme_load(&t);
-    rgb_matrix_mode_noeeprom(t.mode);
-    rgb_matrix_set_speed_noeeprom(t.speed);
-    rgb_matrix_sethsv_noeeprom(t.hue, t.sat, rgb_matrix_get_val());
+    rgb_matrix_mode(t.mode);
+    rgb_matrix_set_speed(t.speed);
+    rgb_matrix_sethsv(t.hue, t.sat, rgb_theme_user_val());
 }
 
+/* Only the index is read here. The look itself comes back from rgb_matrix's own
+ * persisted config, which is the whole point — see theme_apply().
+ *
+ * The index still matters at boot because it selects the indicator palette:
+ * accents, underglow, knobs and Caps Word are not adjustable from the board, so
+ * the table remains their only source.
+ *
+ * Reflashing with a reordered or shortened themes[] can therefore leave the deck
+ * showing the old theme's colours under the new theme's accents. One press of
+ * THEME_NEXT resyncs it, and there is no cheap way to detect it that is worth
+ * more than that.
+ */
 void rgb_theme_init(void) {
     theme_config.raw = eeconfig_read_user();
-    theme_apply();
 }
 
 void eeconfig_init_user(void) {
@@ -200,14 +225,38 @@ void eeconfig_init_user(void) {
     eeconfig_update_user(theme_config.raw);
 }
 
+/* THEME_NEXT / THEME_PREV are the *only* way to change how the board looks, and
+ * that is deliberate. The stock RM_NEXT, RM_HUEU/RM_HUED and RM_SATU/RM_SATD
+ * keycodes used to be mapped across _ADJUST and both _LOWER/_RAISE encoders,
+ * and every one of them fought this table: they write mode/hue/sat straight
+ * into the EEPROM copy of rgb_matrix_config, which theme_apply() then
+ * overwrites from the theme index at the next boot. So a hue nudged with the
+ * encoder spent a write on the EEPROM this file goes out of its way to
+ * protect, left the board looking like no theme in particular, and was silently
+ * discarded on the next power cycle.
+ *
+ * The line that survives is simply which state theme_apply() does not touch:
+ * RM_VALU/RM_VALD (brightness, a room-lighting preference and explicitly not
+ * part of a palette) and RM_TOGG (the enable flag) both persist correctly and
+ * are still mapped. Everything else is a theme's business.
+ */
 bool rgb_theme_process_record(uint16_t keycode, keyrecord_t *record) {
-    if (keycode == THEME_NEXT && record->event.pressed) {
-        theme_config.theme = (theme_config.theme + 1) % THEME_COUNT;
-        eeconfig_update_user(theme_config.raw);
-        theme_apply();
-        return false;
+    if (!record->event.pressed) {
+        return true;
     }
-    return true;
+    switch (keycode) {
+        case THEME_NEXT:
+            theme_config.theme = (theme_config.theme + 1) % THEME_COUNT;
+            break;
+        case THEME_PREV:
+            theme_config.theme = (theme_config.theme + THEME_COUNT - 1) % THEME_COUNT;
+            break;
+        default:
+            return true;
+    }
+    eeconfig_update_user(theme_config.raw);
+    theme_apply();
+    return false;
 }
 
 static void light(uint8_t row, uint8_t col, RGB rgb, uint8_t led_min, uint8_t led_max) {
@@ -253,9 +302,19 @@ static void light(uint8_t row, uint8_t col, RGB rgb, uint8_t led_min, uint8_t le
  * ripple crawling along the outline would fight the steady line that is the
  * best thing about it.
  */
-static void splash_overlay(const theme_t *t, uint8_t val, uint8_t led_min, uint8_t led_max) {
+static void splash_overlay(uint8_t splash, uint8_t val, uint8_t led_min, uint8_t led_max) {
+    /* Live config, not the theme table. A theme *seeds* hue/sat/speed; from then
+     * on RM_HUEU, RM_SATD and RM_SPDU own them, and a ripple drawn in the
+     * table's colour would ignore every one of those and repaint the deck back
+     * to the theme's own hue on the next keystroke. The table is still the
+     * authority for the indicator palette below — accents, glow, knobs — because
+     * nothing on the board adjusts those live.
+     */
+    const uint8_t hue   = rgb_matrix_get_hue();
+    const uint8_t sat   = rgb_matrix_get_sat();
+    const uint8_t speed = rgb_matrix_get_speed();
     const uint8_t count = g_last_hit_tracker.count;
-    const uint8_t first = t->splash == SPLASH_ONE ? qsub8(count, 1) : 0;
+    const uint8_t first = splash == SPLASH_ONE ? qsub8(count, 1) : 0;
 
     for (uint8_t i = led_min; i < led_max; i++) {
         if (g_led_config.flags[i] & LED_FLAG_UNDERGLOW) {
@@ -267,7 +326,7 @@ static void splash_overlay(const theme_t *t, uint8_t val, uint8_t led_min, uint8
             const int16_t  dx     = g_led_config.point[i].x - g_last_hit_tracker.x[j];
             const int16_t  dy     = g_led_config.point[i].y - g_last_hit_tracker.y[j];
             const uint8_t  dist   = sqrt16(dx * dx + dy * dy);
-            const uint16_t tick   = scale16by8(g_last_hit_tracker.tick[j], qadd8(t->speed, 1));
+            const uint16_t tick   = scale16by8(g_last_hit_tracker.tick[j], qadd8(speed, 1));
             const uint16_t effect = tick - dist;
             ripple                = qadd8(ripple, effect > 255 ? 0 : 255 - effect);
         }
@@ -275,7 +334,7 @@ static void splash_overlay(const theme_t *t, uint8_t val, uint8_t led_min, uint8
         if (ripple == 0) {
             continue; // no live front here; leave SOLID_COLOR's resting pixel alone
         }
-        const RGB rgb = hsv_to_rgb((HSV){.h = t->hue, .s = t->sat, .v = qadd8(val, ripple)});
+        const RGB rgb = hsv_to_rgb((HSV){.h = hue, .s = sat, .v = qadd8(val, ripple)});
         rgb_matrix_set_color(i, rgb.r, rgb.g, rgb.b);
     }
 }
@@ -296,7 +355,7 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
 
 #    ifdef RGB_MATRIX_KEYREACTIVE_ENABLED
     if (t.splash != SPLASH_OFF) {
-        splash_overlay(&t, val, led_min, led_max);
+        splash_overlay(t.splash, val, led_min, led_max);
     }
 #    endif
 

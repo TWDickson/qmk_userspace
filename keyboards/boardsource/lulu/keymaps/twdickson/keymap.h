@@ -16,6 +16,7 @@ enum layers {
 enum custom_keycodes {
     GAME_TOGGLE = QK_USER,
     THEME_NEXT,
+    THEME_PREV,
 };
 
 // Tap-dance indices. TD(TD_MEDIA) is the headphone-button media key.

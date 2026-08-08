@@ -166,12 +166,21 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
  * |------+------+------+------+------+------|                    |------+------+------+------+------+------|
  * |      |      |      |      |      |      |                    |      |      |      |      |      |      |
  * |------+------+------+------+------+------|                    |------+------+------+------+------+------|
- * | Caps |RM_NXT|RM_HUE|RM_SAT|RM_VAL|GAME  |-------.    ,-------|      |      |      |      |      |      |
+ * | Caps |THM_NX|RM_HUE|RM_SAT|RM_VAL|GAME  |-------.    ,-------|      |      |      |      |      |      |
  * |------+------+------+------+------+------|RM_TOGG|    |       |------+------+------+------+------+------|
- * |      |RM_PRV|RM_HUD|RM_SAD|RM_VAD|THEME |-------|    |-------|      |CG_TOG|      |      |      |      |
+ * |      |THM_PV|RM_HUD|RM_SAD|RM_VAD|      |-------|    |-------|      |CG_TOG|      |      |      |      |
  * `-----------------------------------------/       /     \      \-----------------------------------------'
  *                   |      |      |      | /      /       \      \  |      | CAD  |      |
  *                   `----------------------------'           '------''--------------------'
+ *
+ * THEME_NEXT/THEME_PREV take the column RM_NEXT/RM_PREV used to have, which is
+ * the same job — step to the next look — done over a curated list instead of
+ * over every animation the board happens to compile. THEME_NEXT has moved off
+ * the row below as a result; that slot is blank now.
+ *
+ * The hue, saturation and brightness controls stay exactly where they were. A
+ * theme *seeds* hue/sat/speed and these adjust them from there, which is the
+ * point of the table having those fields at all.
  *
  * QK_BOOT reboots whichever half is holding the USB cable into its RP2040
  * bootloader, so it mounts as RPI-RP2 and the .uf2 can just be copied over —
@@ -181,10 +190,10 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
  * hardest place on the board to hit by accident, which is the point.
  */
 [_ADJUST] = LAYOUT(
-  XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX,                       XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, QK_BOOT,
-  XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX,                       XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX,
-  KC_CAPS, RM_NEXT, RM_HUEU, RM_SATU, RM_VALU, GAME_TOGGLE,                    XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX,
-  XXXXXXX, RM_PREV, RM_HUED, RM_SATD, RM_VALD, THEME_NEXT, RM_TOGG,   XXXXXXX, XXXXXXX, CG_TOGG, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX,
+  XXXXXXX, XXXXXXX,    XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX,                       XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, QK_BOOT,
+  XXXXXXX, XXXXXXX,    XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX,                       XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX,
+  KC_CAPS, THEME_NEXT, RM_HUEU, RM_SATU, RM_VALU, GAME_TOGGLE,                    XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX,
+  XXXXXXX, THEME_PREV, RM_HUED, RM_SATD, RM_VALD, XXXXXXX,     RM_TOGG,   XXXXXXX, XXXXXXX, CG_TOGG, XXXXXXX, XXXXXXX, XXXXXXX, XXXXXXX,
                              _______, _______, _______, _______,     _______, _______, KC_CAD,  _______
 ),
 
@@ -197,12 +206,23 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
  * exactly as the keymap lookup does. Its volume entry was a verbatim copy of
  * _QWERTY's and resolved there anyway.
  */
+/* The knobs are volume until a thumb layer is held, and then they are the
+ * lighting: theme and brightness on _LOWER, the colour itself on _RAISE, speed
+ * on _ADJUST. Turning through a curated list beats tapping THEME_NEXT seven
+ * times, which is why THEME_PREV exists at all.
+ *
+ * _LOWER's left knob replaces RM_PREV/RM_NEXT — same job, over the theme table
+ * instead of over every animation the board compiles.
+ *
+ * _ADJUST needs its own row now rather than falling through to _LOWER's: speed
+ * is the third thing a theme seeds and nothing else had anywhere to put it.
+ */
 const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][2] = {
-    [_QWERTY] = {ENCODER_CCW_CW(KC_VOLD, KC_VOLU),  ENCODER_CCW_CW(KC_VOLD, KC_VOLU)},
-    [_GAME]   = {ENCODER_CCW_CW(_______, _______),  ENCODER_CCW_CW(_______, _______)},
-    [_LOWER]  = {ENCODER_CCW_CW(RM_PREV, RM_NEXT),  ENCODER_CCW_CW(RM_VALD, RM_VALU)},
-    [_RAISE]  = {ENCODER_CCW_CW(RM_SATD, RM_SATU),  ENCODER_CCW_CW(RM_HUED, RM_HUEU)},
-    [_ADJUST] = {ENCODER_CCW_CW(_______, _______),  ENCODER_CCW_CW(_______, _______)},
+    [_QWERTY] = {ENCODER_CCW_CW(KC_VOLD, KC_VOLU),       ENCODER_CCW_CW(KC_VOLD, KC_VOLU)},
+    [_GAME]   = {ENCODER_CCW_CW(_______, _______),       ENCODER_CCW_CW(_______, _______)},
+    [_LOWER]  = {ENCODER_CCW_CW(THEME_PREV, THEME_NEXT), ENCODER_CCW_CW(RM_VALD, RM_VALU)},
+    [_RAISE]  = {ENCODER_CCW_CW(RM_SATD, RM_SATU),       ENCODER_CCW_CW(RM_HUED, RM_HUEU)},
+    [_ADJUST] = {ENCODER_CCW_CW(RM_SPDD, RM_SPDU),       ENCODER_CCW_CW(_______, _______)},
 };
 #endif
 // clang-format on
@@ -294,6 +314,27 @@ void keyboard_post_init_user(void) {
 #    endif
 #    define RGB_FADE_START (RGB_MATRIX_TIMEOUT - RGB_FADE_MS)
 
+static uint8_t fade_user_val = RGB_MATRIX_DEFAULT_VAL;
+static bool    fading        = false;
+
+/* The brightness actually dialled in, with the idle ramp taken back out.
+ *
+ * rgb_theme.c needs this because theme_apply() now persists, and the live value
+ * is not safe to persist mid-fade: last_matrix_activity_trigger() runs *after*
+ * matrix_task(), so at the moment process_record dispatches THEME_NEXT the idle
+ * clock still reads whatever it did before the key was pressed. Reading
+ * rgb_matrix_get_val() there could therefore write a half-faded brightness to
+ * the EEPROM as if it were a preference.
+ *
+ * In practice the chord saves it — you cannot reach _ADJUST or _LOWER without
+ * first holding a thumb key, which resets the ramp a loop earlier — but that is
+ * a property of where the keycode happens to be mapped, not of the code, and it
+ * would break silently the day THEME_NEXT lands on a single key.
+ */
+uint8_t rgb_theme_user_val(void) {
+    return fading ? fade_user_val : rgb_matrix_get_val();
+}
+
 static void rgb_fade_task(void) {
     // The slave takes rgb_matrix_config straight from the master, so letting
     // both sides drive it would just be two writers racing for the same value.
@@ -301,29 +342,26 @@ static void rgb_fade_task(void) {
         return;
     }
 
-    static uint8_t user_val = RGB_MATRIX_DEFAULT_VAL;
-    static bool    fading   = false;
-
     const uint32_t idle = last_input_activity_elapsed();
 
     if (idle < RGB_FADE_START) {
         if (fading) {
             fading = false;
-            rgb_matrix_sethsv_noeeprom(rgb_matrix_get_hue(), rgb_matrix_get_sat(), user_val);
+            rgb_matrix_sethsv_noeeprom(rgb_matrix_get_hue(), rgb_matrix_get_sat(), fade_user_val);
         } else {
             // Not fading, so the live value is whatever the user dialled in.
-            user_val = rgb_matrix_get_val();
+            fade_user_val = rgb_matrix_get_val();
         }
         return;
     }
 
     if (!fading) {
-        fading   = true;
-        user_val = rgb_matrix_get_val();
+        fading        = true;
+        fade_user_val = rgb_matrix_get_val();
     }
 
     const uint32_t into = idle - RGB_FADE_START;
-    const uint8_t  want = into >= RGB_FADE_MS ? 0 : (uint8_t)((user_val * (RGB_FADE_MS - into)) / RGB_FADE_MS);
+    const uint8_t  want = into >= RGB_FADE_MS ? 0 : (uint8_t)((fade_user_val * (RGB_FADE_MS - into)) / RGB_FADE_MS);
 
     if (want != rgb_matrix_get_val()) {
         rgb_matrix_sethsv_noeeprom(rgb_matrix_get_hue(), rgb_matrix_get_sat(), want);
