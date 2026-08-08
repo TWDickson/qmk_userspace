@@ -71,13 +71,22 @@
  * accents all go cool and the cap match is given up.
  */
 typedef struct {
-    uint8_t mode;  // resting animation
+    /* Uppercase A-Z, five glyphs at most. The OLED is 32 px across its short
+     * axis and the font advances 6, so a sixth glyph does not fit — the panel
+     * clips rather than wraps. This is the same ceiling the shift gate's layer
+     * names run into, and the reason "Mirror" is called Fold.
+     */
+    char name[6];
+
+    uint8_t mode;  // the core effect under the deck: ALPHAS_MODS, or SOLID_COLOR
+                   // as a base coat for the renderers below
     uint8_t hue;   // resting colour of the *deck* — the per-key LEDs
     uint8_t sat;   //
-    uint8_t speed; // per-mode: ALPHAS_MODS reads it as the alpha/mod hue split,
-                   // the gradients as hue span, a splash theme as ripple rate
+    uint8_t speed; // never a rate: ALPHAS_MODS reads it as the alpha/mod hue
+                   // split, DECK_MIRROR and DECK_ZONES as a hue span, the
+                   // reactive decks as a ripple or decay rate
 
-    uint8_t splash; // SPLASH_OFF, or which hits splash_overlay() ripples from
+    uint8_t deck; // which renderer draws the per-key LEDs
 
     uint8_t glow_hue; // underglow, held separately from the deck — see above
     uint8_t glow_sat;
@@ -91,67 +100,90 @@ typedef struct {
     uint8_t caps_hue; // the shifts while Caps Word is armed
 } theme_t;
 
-enum splash_kind {
-    SPLASH_OFF, // not a reactive theme
-    SPLASH_ONE, // newest hit only — the next keystroke cancels the last ripple
-    SPLASH_ALL, // every live hit — fast typing overlaps its own ripples
+/* Five of the six animations the board's info.json compiles are #undef'd in
+ * config.h, because they are functions of x, y or time and none of them knows
+ * what a keyboard is. What replaced them is the deck renderers further down.
+ *
+ * ALPHAS_MODS is the one that stays, and it earns it: LED_FLAG_MODIFIER on this
+ * board is exactly the outer pinky column plus the four thumbs — the eight keys
+ * a half that carry the red Escape, the blue LOWER and the peach RAISE caps. It
+ * is the only stock effect here whose geometry is a fact about the hardware
+ * rather than about the coordinate system.
+ *
+ * An #undef of someone else's #define fails quiet — rename one upstream and the
+ * effect simply comes back with nothing to notice it — so this is the tripwire.
+ * NONE, SOLID_COLOR and ALPHAS_MODS is the whole mode table, so EFFECT_MAX is 3.
+ * If it fires, check the ENABLE_RGB_MATRIX_* spellings against the current
+ * quantum/rgb_matrix/animations/ before changing the number.
+ */
+_Static_assert(RGB_MATRIX_EFFECT_MAX == 3, "an unused stock animation is being compiled in again");
+
+enum deck_kind {
+    DECK_EFFECT, // the core effect draws it; we only add indicators on top
+    DECK_SPLASH, // rings expanding out from every live keystroke
+    DECK_MIRROR, // hue ramps outward from each half's inner edge, mirrored
+    DECK_ZONES,  // hue by finger group, dead still
+    DECK_TRAIL,  // per-key afterglow decaying back to the resting deck
+    DECK_PULSE,  // deck flat; the *underglow* breathes — drawn in the glow block
 };
 
 static const theme_t PROGMEM themes[] = {
     // Lulu — the board's own colours. The deck rests amber to match the
     // knobs, so the whole board is lit from the moment it wakes, and every
-    // keystroke sends a ring out from under the cap that was struck. ALL
-    // rather than ONE so a fast line overlaps its ripples instead of
-    // cancelling them. The accents are all cool because the deck is warm.
-    {.mode = RGB_MATRIX_SOLID_COLOR, .hue = 24, .sat = 255, .speed = 96, .splash = SPLASH_ALL, .glow_hue = 12, .glow_sat = 255, .knob_hue = 28, .knob_sat = 180, .accent = {170, 128, 213}, .accent_sat = 255, .game_hue = 85, .caps_hue = 213},
+    // keystroke sends a ring out from under the cap that was struck. The
+    // accents are all cool because the deck is warm: an accent within ~30 hue
+    // of the deck it is drawn on is invisible, which is what a yellow RAISE at
+    // 43 on this 24 deck used to be.
+    {.name = "LULU", .mode = RGB_MATRIX_SOLID_COLOR, .hue = 24, .sat = 255, .speed = 96, .deck = DECK_SPLASH, .glow_hue = 12, .glow_sat = 255, .knob_hue = 28, .knob_sat = 180, .accent = {170, 128, 213}, .accent_sat = 255, .game_hue = 85, .caps_hue = 213},
 
     // Rose — what the board booted into before any of this existed, with the
     // ALPHAS_MODS split finally pointed somewhere. speed is the hue offset
-    // applied to LED_FLAG_MODIFIER, which on this board is exactly the outer
-    // pinky column plus all four thumbs — the eight keys per half that carry
-    // the coloured caps. 240 + 20 wraps to 4, so those go red under the red
-    // Escape while the alphas stay rose. It used to be 128, which put them 112
-    // hue away: a green fringe on a rose board, almost certainly a leftover
-    // from reading `speed` as a rate.
-    {.mode = RGB_MATRIX_ALPHAS_MODS, .hue = 240, .sat = 239, .speed = 20, .splash = SPLASH_OFF, .glow_hue = 240, .glow_sat = 255, .knob_hue = 24, .knob_sat = 180, .accent = {170, 43, 128}, .accent_sat = 255, .game_hue = 85, .caps_hue = 43},
-
-    // Deep — the blue the old comment claimed the board already was, with a
-    // single ripple that the next keystroke restarts rather than stacks: the
-    // quieter of the two reactive themes. The deck takes the blue, so LOWER's
-    // accent gives it up and goes magenta. The knobs are the only warm thing
-    // on it, which is the point — two amber lamps on a cold board.
-    {.mode = RGB_MATRIX_SOLID_COLOR, .hue = 170, .sat = 255, .speed = 96, .splash = SPLASH_ONE, .glow_hue = 150, .glow_sat = 255, .knob_hue = 24, .knob_sat = 200, .accent = {213, 43, 0}, .accent_sat = 255, .game_hue = 85, .caps_hue = 213},
-
-    // Ember — the warmest theme, on a gradient running away from the wrists.
-    // GRADIENT_UP_DOWN spans `scale8(64, speed) * 4` hue from the top row to
-    // the thumbs, so speed is a span and not a rate: 28 gives 4 -> 32, deep
-    // red at the number row easing to amber under the thumbs. It was 64,
-    // which is a span of 64 and put the thumb row at hue 72 — a chartreuse
-    // bottom edge on a theme whose whole idea is that everything is warm.
-    {.mode = RGB_MATRIX_GRADIENT_UP_DOWN, .hue = 4, .sat = 255, .speed = 28, .splash = SPLASH_OFF, .glow_hue = 0, .glow_sat = 255, .knob_hue = 32, .knob_sat = 170, .accent = {170, 128, 213}, .accent_sat = 255, .game_hue = 85, .caps_hue = 191},
+    // applied to LED_FLAG_MODIFIER, so 240 + 20 wraps to 4 and the outer
+    // column and thumbs go red under the red Escape while the alphas stay
+    // rose. It used to be 128, which put them 112 hue away: a green fringe on
+    // a rose board, almost certainly a leftover from reading speed as a rate.
+    {.name = "ROSE", .mode = RGB_MATRIX_ALPHAS_MODS, .hue = 240, .sat = 239, .speed = 20, .deck = DECK_EFFECT, .glow_hue = 240, .glow_sat = 255, .knob_hue = 24, .knob_sat = 180, .accent = {170, 43, 128}, .accent_sat = 255, .game_hue = 85, .caps_hue = 43},
 
     // Mono — the only colour on the board is information. Not actually
-    // monochrome: it is warm white on the alphas and cool white on the mods,
-    // 48 saturation apart, which is enough to see the outer column and the
-    // thumbs as a separate block and not enough to read as a colour. It used
-    // to be sat 0 with speed 0, and ALPHAS_MODS with no saturation and no
-    // offset is a very long way of writing SOLID_COLOR.
-    {.mode = RGB_MATRIX_ALPHAS_MODS, .hue = 30, .sat = 48, .speed = 128, .splash = SPLASH_OFF, .glow_hue = 0, .glow_sat = 0, .knob_hue = 30, .knob_sat = 0, .accent = {170, 21, 0}, .accent_sat = 255, .game_hue = 85, .caps_hue = 128},
+    // monochrome: warm white on the alphas, cool white on the mods, 48
+    // saturation apart, which is enough to see the outer column and the thumbs
+    // as a block and not enough to read as a colour. It used to be sat 0 with
+    // speed 0, and ALPHAS_MODS with no saturation and no offset is a very long
+    // way of writing SOLID_COLOR. If the split turns out to be invisible on the
+    // charcoal plate, .sat is the knob — try 70-90.
+    {.name = "MONO", .mode = RGB_MATRIX_ALPHAS_MODS, .hue = 30, .sat = 48, .speed = 128, .deck = DECK_EFFECT, .glow_hue = 0, .glow_sat = 0, .knob_hue = 30, .knob_sat = 0, .accent = {170, 21, 0}, .accent_sat = 255, .game_hue = 85, .caps_hue = 128},
 
-    // Split — the only theme that uses the board being a split. The x axis of
-    // the LED map runs 0-224 across BOTH halves, so GRADIENT_LEFT_RIGHT lays
-    // one gradient over the pair: blue on the left hand, violet-rose on the
-    // right, with the seam falling in the gap where there is no board. The
-    // underglow takes the midpoint so the two outlines meet in the middle.
-    {.mode = RGB_MATRIX_GRADIENT_LEFT_RIGHT, .hue = 160, .sat = 255, .speed = 32, .splash = SPLASH_OFF, .glow_hue = 188, .glow_sat = 255, .knob_hue = 28, .knob_sat = 180, .accent = {128, 43, 85}, .accent_sat = 255, .game_hue = 85, .caps_hue = 43},
+    // Mirror — hue ramps outward from each half's inner edge, so the colour
+    // follows the reach of the fingers and both hands are identical. This is
+    // what GRADIENT_LEFT_RIGHT was reaching for and structurally cannot do:
+    // its x axis runs monotonically 0-224 across the pair, nothing folds it,
+    // and the left hand always ends a different colour from the right. Blue
+    // under the index fingers easing to rose out at the pinkies.
+    {.name = "FOLD", .mode = RGB_MATRIX_SOLID_COLOR, .hue = 170, .sat = 255, .speed = 64, .deck = DECK_MIRROR, .glow_hue = 202, .glow_sat = 255, .knob_hue = 28, .knob_sat = 180, .accent = {21, 85, 0}, .accent_sat = 255, .game_hue = 85, .caps_hue = 43},
 
-    // Sweep — movement without ever going dark. BAND_SAT bands *saturation*
-    // and leaves value alone, so the deck sits pale at full brightness and a
-    // saturated teal band travels across it, left hand to right. Every other
-    // moving effect this board compiles (BREATHING, BAND_VAL) bands value
-    // instead and takes the deck to black at the trough, which is the one
-    // thing every theme here is built to avoid.
-    {.mode = RGB_MATRIX_BAND_SAT, .hue = 140, .sat = 255, .speed = 40, .splash = SPLASH_OFF, .glow_hue = 140, .glow_sat = 255, .knob_hue = 24, .knob_sat = 200, .accent = {213, 21, 0}, .accent_sat = 255, .game_hue = 85, .caps_hue = 213},
+    // Zones — colour by finger rather than by geometry: the pinky and its
+    // outer reach, ring and middle, index and its stretch, then the thumbs.
+    // Completely still, and the only look here that encodes how the board is
+    // used rather than where the LEDs happen to sit. Nothing stock comes
+    // close, because every built-in effect is a function of x, y or time and
+    // none of them can see the matrix column.
+    {.name = "ZONES", .mode = RGB_MATRIX_SOLID_COLOR, .hue = 85, .sat = 255, .speed = 60, .deck = DECK_ZONES, .glow_hue = 107, .glow_sat = 255, .knob_hue = 26, .knob_sat = 180, .accent = {213, 21, 0}, .accent_sat = 255, .game_hue = 85, .caps_hue = 213},
+
+    // Trail — each key flares on the strike and decays back to the resting
+    // deck over about a second. A trail of where the hands have been rather
+    // than a ring expanding away from it, and much quieter under fast typing
+    // than Lulu is. TYPING_HEATMAP is the nearest stock equivalent and is
+    // wrong three ways: it hard-codes a blue-to-red ramp that ignores the
+    // theme hue, it wants a framebuffer in RAM, and it rests at black.
+    {.name = "TRAIL", .mode = RGB_MATRIX_SOLID_COLOR, .hue = 205, .sat = 255, .speed = 96, .deck = DECK_TRAIL, .glow_hue = 205, .glow_sat = 255, .knob_hue = 24, .knob_sat = 200, .accent = {43, 85, 128}, .accent_sat = 255, .game_hue = 85, .caps_hue = 43},
+
+    // Pulse — the deck held perfectly flat while the outline breathes. Only
+    // possible because the underglow is already overwritten every frame below,
+    // so the two groups can be driven independently; no stock effect can move
+    // one and not the other, and BREATHING takes the whole board including the
+    // deck to black at the trough. The calmest theme here, and the one that
+    // makes the most of the underglow being a neon line rather than a wash.
+    {.name = "PULSE", .mode = RGB_MATRIX_SOLID_COLOR, .hue = 128, .sat = 255, .speed = 70, .deck = DECK_PULSE, .glow_hue = 128, .glow_sat = 255, .knob_hue = 24, .knob_sat = 200, .accent = {213, 21, 0}, .accent_sat = 255, .game_hue = 85, .caps_hue = 213},
 };
 
 #    define THEME_COUNT (sizeof(themes) / sizeof(themes[0]))
@@ -215,8 +247,23 @@ static void theme_apply(void) {
  * THEME_NEXT resyncs it, and there is no cheap way to detect it that is worth
  * more than that.
  */
+/* For the _ADJUST config panel. Copied into a static rather than returning a
+ * pointer into the caller's stack copy of the theme, since the OLED renderer
+ * holds it across draw_text().
+ */
+const char *rgb_theme_name(void) {
+    static char name[sizeof(((theme_t *)0)->name)];
+    theme_t     t;
+    theme_load(&t);
+    memcpy(name, t.name, sizeof(name));
+    return name;
+}
+
+static void zones_init(void); // defined with the deck renderers, further down
+
 void rgb_theme_init(void) {
     theme_config.raw = eeconfig_read_user();
+    zones_init();
 }
 
 void eeconfig_init_user(void) {
@@ -267,7 +314,120 @@ static void light(uint8_t row, uint8_t col, RGB rgb, uint8_t led_min, uint8_t le
     rgb_matrix_set_color(led, rgb.r, rgb.g, rgb.b);
 }
 
+/* ── deck renderers ───────────────────────────────────────────────────────
+ *
+ * Each of these paints the per-key LEDs itself, on top of a SOLID_COLOR base
+ * coat laid down by the core effect. They exist because the stock animations
+ * are all functions of x, y or time, and none of the looks below is.
+ *
+ * Every one reads the *live* hue/sat/speed rather than the theme's, so a theme
+ * seeds them and RM_HUEU/RM_SATD/RM_SPDU keep working from there. Reading the
+ * table instead would repaint the deck back to the theme's own colour on every
+ * frame and make the knobs do nothing — which is exactly the bug the reactive
+ * decks shipped with.
+ *
+ * The underglow is skipped throughout: it is drawn separately below, and a deck
+ * effect crawling along the outline would fight the steady line that is the
+ * best thing about it.
+ */
+
+/* Hue ramps outward from each half's inner edge, mirrored about the gap, so
+ * both hands are identical and the colour follows the reach of the fingers.
+ *
+ * GRADIENT_LEFT_RIGHT cannot do this. Its x runs monotonically 0-224 across the
+ * pair — left half 0-103, right half 120-224 — and nothing in it folds that
+ * axis, so the two hands always end on different hues. Folding is the entire
+ * difference, and it is one line.
+ *
+ * speed is the hue span across the reach, not a rate: at 64 the pinkies land 64
+ * hue from the index fingers.
+ */
+static void mirror_deck(uint8_t val, uint8_t led_min, uint8_t led_max) {
+    const uint8_t hue  = rgb_matrix_get_hue();
+    const uint8_t sat  = rgb_matrix_get_sat();
+    const uint8_t span = rgb_matrix_get_speed();
+
+    for (uint8_t i = led_min; i < led_max; i++) {
+        if (g_led_config.flags[i] & LED_FLAG_UNDERGLOW) {
+            continue;
+        }
+        const uint8_t x = g_led_config.point[i].x;
+        // Distance from this half's inner edge. The gap is empty, so anything
+        // at or below the left half's inner key (x 103) belongs to the left.
+        const uint8_t d   = x <= 110 ? 103 - x : x - 120;
+        const RGB     rgb = hsv_to_rgb((HSV){.h = hue + (uint8_t)(((uint16_t)span * d) / 104), .s = sat, .v = val});
+        rgb_matrix_set_color(i, rgb.r, rgb.g, rgb.b);
+    }
+}
+
+/* Colour by finger. The LED map has no idea which finger reaches a key — it
+ * only knows where the diode is — so the grouping comes off the matrix column,
+ * walked once at init into a table rather than reverse-searched every frame.
+ *
+ * speed is the hue step between zones.
+ */
+enum { ZONE_PINKY, ZONE_MID, ZONE_INDEX, ZONE_THUMB };
+
+static uint8_t led_zone[RGB_MATRIX_LED_COUNT];
+
+static void zones_init(void) {
+    memset(led_zone, ZONE_THUMB, sizeof(led_zone));
+    for (uint8_t row = 0; row < MATRIX_ROWS; row++) {
+        for (uint8_t col = 0; col < MATRIX_COLS; col++) {
+            const uint8_t led = g_led_config.matrix_co[row][col];
+            if (led == NO_LED) {
+                continue;
+            }
+            // Rows 4 and 9 are the thumb clusters, one per half. Everything
+            // else is a finger column: 0-1 pinky and its outer reach, 2-3 ring
+            // and middle, 4-5 index and its stretch.
+            led_zone[led] = (row == 4 || row == 9) ? ZONE_THUMB : col <= 1 ? ZONE_PINKY : col <= 3 ? ZONE_MID : ZONE_INDEX;
+        }
+    }
+}
+
+static void zones_deck(uint8_t val, uint8_t led_min, uint8_t led_max) {
+    const uint8_t hue  = rgb_matrix_get_hue();
+    const uint8_t sat  = rgb_matrix_get_sat();
+    const uint8_t step = rgb_matrix_get_speed() / 4;
+
+    for (uint8_t i = led_min; i < led_max; i++) {
+        if (g_led_config.flags[i] & LED_FLAG_UNDERGLOW) {
+            continue;
+        }
+        const RGB rgb = hsv_to_rgb((HSV){.h = hue + led_zone[i] * step, .s = sat, .v = val});
+        rgb_matrix_set_color(i, rgb.r, rgb.g, rgb.b);
+    }
+}
+
 #    ifdef RGB_MATRIX_KEYREACTIVE_ENABLED
+
+/* Per-key afterglow: the struck key flares and decays back to the resting deck.
+ *
+ * This walks the *hits* rather than the LEDs — there are at most
+ * LED_HITS_TO_REMEMBER of them and each one names the LED it landed on, so this
+ * is a handful of iterations a frame against the splash's 58. Forward order
+ * matters: the newest hit is last in the buffer, so a key struck twice ends on
+ * the fresher flare.
+ */
+static void trail_overlay(uint8_t val, uint8_t led_min, uint8_t led_max) {
+    const uint8_t hue   = rgb_matrix_get_hue();
+    const uint8_t sat   = rgb_matrix_get_sat();
+    const uint8_t speed = rgb_matrix_get_speed();
+
+    for (uint8_t j = 0; j < g_last_hit_tracker.count; j++) {
+        const uint8_t i = g_last_hit_tracker.index[j];
+        if (i < led_min || i >= led_max || (g_led_config.flags[i] & LED_FLAG_UNDERGLOW)) {
+            continue;
+        }
+        const uint16_t age = scale16by8(g_last_hit_tracker.tick[j], qadd8(speed, 1));
+        if (age >= 255) {
+            continue; // faded out; SOLID_COLOR's resting pixel already stands
+        }
+        const RGB rgb = hsv_to_rgb((HSV){.h = hue, .s = sat, .v = qadd8(val, 255 - (uint8_t)age)});
+        rgb_matrix_set_color(i, rgb.r, rgb.g, rgb.b);
+    }
+}
 
 /* The reactive themes are SOLID_COLOR underneath with the ripples painted on
  * top here, rather than SOLID_SPLASH / SOLID_MULTISPLASH.
@@ -302,19 +462,11 @@ static void light(uint8_t row, uint8_t col, RGB rgb, uint8_t led_min, uint8_t le
  * ripple crawling along the outline would fight the steady line that is the
  * best thing about it.
  */
-static void splash_overlay(uint8_t splash, uint8_t val, uint8_t led_min, uint8_t led_max) {
-    /* Live config, not the theme table. A theme *seeds* hue/sat/speed; from then
-     * on RM_HUEU, RM_SATD and RM_SPDU own them, and a ripple drawn in the
-     * table's colour would ignore every one of those and repaint the deck back
-     * to the theme's own hue on the next keystroke. The table is still the
-     * authority for the indicator palette below — accents, glow, knobs — because
-     * nothing on the board adjusts those live.
-     */
+static void splash_overlay(uint8_t val, uint8_t led_min, uint8_t led_max) {
     const uint8_t hue   = rgb_matrix_get_hue();
     const uint8_t sat   = rgb_matrix_get_sat();
     const uint8_t speed = rgb_matrix_get_speed();
     const uint8_t count = g_last_hit_tracker.count;
-    const uint8_t first = splash == SPLASH_ONE ? qsub8(count, 1) : 0;
 
     for (uint8_t i = led_min; i < led_max; i++) {
         if (g_led_config.flags[i] & LED_FLAG_UNDERGLOW) {
@@ -322,7 +474,7 @@ static void splash_overlay(uint8_t splash, uint8_t val, uint8_t led_min, uint8_t
         }
 
         uint8_t ripple = 0;
-        for (uint8_t j = first; j < count; j++) {
+        for (uint8_t j = 0; j < count; j++) {
             const int16_t  dx     = g_led_config.point[i].x - g_last_hit_tracker.x[j];
             const int16_t  dy     = g_led_config.point[i].y - g_last_hit_tracker.y[j];
             const uint8_t  dist   = sqrt16(dx * dx + dy * dy);
@@ -353,11 +505,26 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
     const uint8_t val   = rgb_matrix_get_val();
     const uint8_t layer = get_highest_layer(layer_state | default_layer_state);
 
+    switch (t.deck) {
+        case DECK_MIRROR:
+            mirror_deck(val, led_min, led_max);
+            break;
+        case DECK_ZONES:
+            zones_deck(val, led_min, led_max);
+            break;
 #    ifdef RGB_MATRIX_KEYREACTIVE_ENABLED
-    if (t.splash != SPLASH_OFF) {
-        splash_overlay(t.splash, val, led_min, led_max);
-    }
+        case DECK_SPLASH:
+            splash_overlay(val, led_min, led_max);
+            break;
+        case DECK_TRAIL:
+            trail_overlay(val, led_min, led_max);
+            break;
 #    endif
+        default:
+            // DECK_EFFECT leaves the deck to the core animation; DECK_PULSE
+            // wants it flat, which SOLID_COLOR has already drawn.
+            break;
+    }
 
     /* The underglow is held at the theme's own colour rather than left to the
      * animation. It is the board's outline, not a wash across the caps, and an
@@ -371,7 +538,22 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
      * itself in one colour rather than in whatever the palette fancies.
      */
     const bool game = layer == _GAME;
-    const RGB  glow = hsv_to_rgb((HSV){.h = game ? t.game_hue : t.glow_hue, .s = game ? t.accent_sat : t.glow_sat, .v = val});
+
+    /* DECK_PULSE breathes here rather than on the deck, which is the whole
+     * theme: no stock effect can move one LED group and hold the other, since
+     * they all walk every LED the flags let them touch. BREATHING would take
+     * the deck to black at the trough along with the outline.
+     *
+     * The maths is upstream's own, out of breathing_anim.h — sin8 folded about
+     * its midpoint so the ramp is symmetric, then doubled to reach full swing.
+     */
+    uint8_t glow_val = val;
+    if (t.deck == DECK_PULSE && !game) {
+        const uint8_t phase = scale16by8(g_rgb_timer, qadd8(rgb_matrix_get_speed() / 8, 1));
+        glow_val            = scale8(val, abs8(sin8(phase) - 128) * 2);
+    }
+
+    const RGB glow = hsv_to_rgb((HSV){.h = game ? t.game_hue : t.glow_hue, .s = game ? t.accent_sat : t.glow_sat, .v = glow_val});
     for (uint8_t i = led_min; i < led_max; i++) {
         if (g_led_config.flags[i] & LED_FLAG_UNDERGLOW) {
             rgb_matrix_set_color(i, glow.r, glow.g, glow.b);

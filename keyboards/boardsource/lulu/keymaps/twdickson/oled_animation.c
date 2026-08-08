@@ -3,6 +3,7 @@
 
 #include "oled_animation.h"
 #include "keymap.h"
+#include "rgb_theme.h" // the config panel reads the theme name and the brightness
 
 #include <string.h>
 
@@ -248,6 +249,17 @@ typedef char framebuffer_t[ANIM_ROWS][ANIM_WIDTH];
 
 typedef enum { PX_SET, PX_CLEAR, PX_XOR } px_op_t;
 
+/* One buffer for all three renderers. They are mutually exclusive by
+ * construction — the starfield and the config panel are both master-only and
+ * pick between themselves on the layer, the gate is the secondary's — so the
+ * three 512-byte statics this used to have were never live at the same time.
+ *
+ * Static rather than automatic because a frame is composed in full before any
+ * of it is written, and 512 bytes is more than the OLED task wants on its
+ * stack.
+ */
+static framebuffer_t frame;
+
 /* The panels are 128x32 and mounted with the long axis running away from the
  * user, so what the framebuffer calls a row is a screen *column*: buffer +x
  * runs up the screen and buffer +y runs across it. Upstream's own layer0_img
@@ -328,6 +340,17 @@ static uint8_t centre_sx(uint8_t len) {
     return w >= SCREEN_W ? 0 : (SCREEN_W - w) / 2;
 }
 
+/* The master's panel takes the frame a page at a time and unrotated. Only the
+ * secondary needs the byte/bit reversal, because only its oled_init_kb() drives
+ * the display at 180 degrees — see render_gate().
+ */
+static void flush_frame(void) {
+    for (uint8_t r = 0; r < ANIM_ROWS; r++) {
+        oled_set_cursor(0, r);
+        oled_write_raw(frame[r], ANIM_WIDTH);
+    }
+}
+
 static const char *const space_rows[ANIM_ROWS] = {space_row_1, space_row_2, space_row_3, space_row_4};
 static const char *const ship_rows[ANIM_ROWS]  = {ship_row_1, ship_row_2, ship_row_3, ship_row_4};
 static const char *const mask_rows[ANIM_ROWS]  = {mask_row_1, mask_row_2, mask_row_3, mask_row_4};
@@ -344,20 +367,15 @@ static void render_starfield(void) {
     const uint8_t nose = wpm / 4; // the ship pulls ahead as typing speed climbs
     const bool    game = get_highest_layer(default_layer_state) == _GAME;
 
-    // Static rather than automatic: the whole frame is composed before any of
-    // it is written now that the banner spans pages, and 512 bytes is more than
-    // this task wants on the stack.
-    static framebuffer_t fb;
-
     for (uint8_t r = 0; r < ANIM_ROWS; r++) {
         // Ahead of the ship's nose there is nothing but starfield.
         for (uint8_t i = 0; i < nose; i++) {
-            fb[r][i] = pgm_read_byte(space_rows[r] + i + scroll);
+            frame[r][i] = pgm_read_byte(space_rows[r] + i + scroll);
         }
         // From the nose back, the mask clears a hole in the field and the ship
         // sprite drops into it.
         for (uint8_t i = nose; i < ANIM_WIDTH; i++) {
-            fb[r][i] = (pgm_read_byte(space_rows[r] + i + scroll) & pgm_read_byte(mask_rows[r] + i - nose)) | pgm_read_byte(ship_rows[r] + i - nose);
+            frame[r][i] = (pgm_read_byte(space_rows[r] + i + scroll) & pgm_read_byte(mask_rows[r] + i - nose)) | pgm_read_byte(ship_rows[r] + i - nose);
         }
     }
 
@@ -365,16 +383,99 @@ static void render_starfield(void) {
         // Knock a hole in the field first, so the banner is read against black
         // rather than through it.
         const uint8_t sx = centre_sx(4);
-        rect(fb, sx, GAME_BANNER_SY, 4 * GLYPH_ADVANCE - 1, GLYPH_H, PX_CLEAR);
-        draw_text(fb, "GAME", sx, GAME_BANNER_SY);
+        rect(frame, sx, GAME_BANNER_SY, 4 * GLYPH_ADVANCE - 1, GLYPH_H, PX_CLEAR);
+        draw_text(frame, "GAME", sx, GAME_BANNER_SY);
     }
 
-    for (uint8_t r = 0; r < ANIM_ROWS; r++) {
-        oled_set_cursor(0, r);
-        oled_write_raw(fb[r], ANIM_WIDTH);
-    }
+    flush_frame();
 
     scroll = (scroll + 1 + wpm / 15) % (ANIM_WIDTH * 2);
+}
+
+/* ── The config panel ─────────────────────────────────────────────────────────
+ *
+ * Replaces the starfield on the master while _ADJUST is held, because _ADJUST
+ * is where all of the lighting and OS state lives and none of it shows up
+ * anywhere else: a theme has a name only in the source, and CG_TOGG's setting
+ * is invisible until you press a key and get the wrong modifier.
+ *
+ * Same 32 px across as the gate, so the same five-glyph ceiling — which is what
+ * the theme names are cut to fit.
+ *
+ * The four knobs are bars rather than numbers, for two reasons. The font is
+ * A-Z with no digits, and draw_text() indexes it with `c - 'A'`, so a digit
+ * would read off the end of the table rather than print. And while you are
+ * actually turning a knob, a level you can watch move is worth more than three
+ * characters you have to stop and read.
+ */
+#define CFG_LEFT 2
+#define CFG_BAR_W (SCREEN_W - 2 * CFG_LEFT)
+#define CFG_BAR_H 3
+
+#define CFG_TITLE_SY 4
+#define CFG_NAME_SY 15
+#define CFG_RULE1_SY 28
+#define CFG_KNOB_SY 34   // first knob's label
+#define CFG_KNOB_PITCH 16 // label, gap, bar, gap
+#define CFG_RULE2_SY 99
+#define CFG_OS_SY 105
+#define CFG_BASE_SY 116
+
+static void draw_rule(uint8_t sy) {
+    rect(frame, 0, sy, SCREEN_W, 1, PX_SET);
+}
+
+/* A one-pixel track the full width so an empty bar still reads as a scale
+ * rather than as a missing row, with the filled portion sitting on top of it.
+ */
+static void draw_bar(uint8_t sy, uint8_t level) {
+    rect(frame, CFG_LEFT, sy + CFG_BAR_H - 1, CFG_BAR_W, 1, PX_SET);
+    const uint8_t w = (uint8_t)(((uint16_t)level * CFG_BAR_W) / 255);
+    if (w > 0) {
+        rect(frame, CFG_LEFT, sy, w, CFG_BAR_H, PX_SET);
+    }
+}
+
+static void render_config(void) {
+    memset(frame, 0, sizeof(frame));
+
+    draw_text(frame, "THEME", centre_sx(5), CFG_TITLE_SY);
+
+    const char *const name = rgb_theme_name();
+    draw_text(frame, name, centre_sx(strlen(name)), CFG_NAME_SY);
+    // Inverted the way the gate's block is, and for the same reason: it marks
+    // the one line on the panel that is a selection rather than a reading.
+    rect(frame, 0, CFG_NAME_SY - 2, SCREEN_W, GLYPH_H + 4, PX_XOR);
+
+    draw_rule(CFG_RULE1_SY);
+
+    /* Deliberately rgb_theme_user_val() and not rgb_matrix_get_val(): the idle
+     * ramp drives the live value, and a brightness bar that slid to empty while
+     * the board dimmed would be reporting the ramp, not the setting.
+     */
+    static const char *const knob_name[] = {"HUE", "SAT", "VAL", "SPD"};
+    const uint8_t            knob_lvl[]  = {rgb_matrix_get_hue(), rgb_matrix_get_sat(), rgb_theme_user_val(), rgb_matrix_get_speed()};
+
+    for (uint8_t i = 0; i < 4; i++) {
+        const uint8_t sy = CFG_KNOB_SY + i * CFG_KNOB_PITCH;
+        draw_text(frame, knob_name[i], CFG_LEFT, sy);
+        draw_bar(sy + GLYPH_H + 2, knob_lvl[i]);
+    }
+
+    draw_rule(CFG_RULE2_SY);
+
+    /* CG_TOGG flips swap_lctl_lgui, which is what turns every Ctrl-based
+     * shortcut in this keymap into a Cmd one — so swapped means macOS. It is
+     * the single most useful thing on this panel: nothing else on the board
+     * says which machine the keymap thinks it is plugged into.
+     */
+    const char *const os = keymap_config.swap_lctl_lgui ? "MAC" : "WIN";
+    draw_text(frame, os, centre_sx(strlen(os)), CFG_OS_SY);
+
+    const char *const base = get_highest_layer(default_layer_state) == _GAME ? "GAME" : "BASE";
+    draw_text(frame, base, centre_sx(strlen(base)), CFG_BASE_SY);
+
+    flush_frame();
 }
 
 /* ── The shift gate ───────────────────────────────────────────────────────────
@@ -453,31 +554,30 @@ static const struct {
  * gate's own coordinates needs to change.
  */
 static void render_gate(uint8_t block_sy, uint8_t engaged) {
-    static framebuffer_t fb;
-    memset(fb, 0, sizeof(fb));
+    memset(frame, 0, sizeof(frame));
 
     for (uint8_t i = 0; i < GATE_POSITIONS; i++) {
-        draw_text(fb, gate[i].name, centre_sx(strlen(gate[i].name)), gate[i].sy + GATE_TEXT_DY);
+        draw_text(frame, gate[i].name, centre_sx(strlen(gate[i].name)), gate[i].sy + GATE_TEXT_DY);
     }
 
     for (uint8_t x = 0; x < SCREEN_W; x++) {
         if (x < GATE_NOTCH_SX || x >= GATE_NOTCH_SX + GATE_NOTCH_W) {
-            px(fb, x, GATE_LINE_SY, PX_SET);
+            px(frame, x, GATE_LINE_SY, PX_SET);
         }
     }
 
     const uint8_t detent_sy = gate[engaged].sy + GATE_DETENT_DY;
-    rect(fb, 0, detent_sy, GATE_DETENT_W, GATE_DETENT_H, PX_SET);
-    rect(fb, SCREEN_W - GATE_DETENT_W, detent_sy, GATE_DETENT_W, GATE_DETENT_H, PX_SET);
+    rect(frame, 0, detent_sy, GATE_DETENT_W, GATE_DETENT_H, PX_SET);
+    rect(frame, SCREEN_W - GATE_DETENT_W, detent_sy, GATE_DETENT_W, GATE_DETENT_H, PX_SET);
 
     // Inverting rather than filling is what lets the block sit *on* a name
     // instead of erasing it, and it costs nothing: the glyphs are already drawn.
-    rect(fb, 0, block_sy, SCREEN_W, GATE_BLOCK_H, PX_XOR);
+    rect(frame, 0, block_sy, SCREEN_W, GATE_BLOCK_H, PX_XOR);
 
-    char *flat = &fb[0][0];
-    for (uint16_t i = 0; i < sizeof(fb) / 2; i++) {
+    char *flat = &frame[0][0];
+    for (uint16_t i = 0; i < sizeof(frame) / 2; i++) {
         uint8_t a = (uint8_t)flat[i];
-        uint8_t b = (uint8_t)flat[sizeof(fb) - 1 - i];
+        uint8_t b = (uint8_t)flat[sizeof(frame) - 1 - i];
         a         = ((a & 0xf0) >> 4) | ((a & 0x0f) << 4);
         a         = ((a & 0xcc) >> 2) | ((a & 0x33) << 2);
         a         = ((a & 0xaa) >> 1) | ((a & 0x55) << 1);
@@ -485,11 +585,11 @@ static void render_gate(uint8_t block_sy, uint8_t engaged) {
         b         = ((b & 0xcc) >> 2) | ((b & 0x33) << 2);
         b         = ((b & 0xaa) >> 1) | ((b & 0x55) << 1);
 
-        flat[i]                  = (char)b;
-        flat[sizeof(fb) - 1 - i] = (char)a;
+        flat[i]                     = (char)b;
+        flat[sizeof(frame) - 1 - i] = (char)a;
     }
 
-    oled_write_raw(flat, sizeof(fb));
+    oled_write_raw(flat, sizeof(frame));
 }
 
 /* Where the block is right now, easing out so it leaves fast and settles slow —
@@ -514,7 +614,16 @@ static uint8_t gate_pos(uint8_t from, uint8_t to, uint16_t started) {
 
 void oled_render_animation(void) {
     if (is_keyboard_master()) {
-        render_starfield();
+        /* _ADJUST only, not every thumb layer. The knobs on _LOWER and _RAISE
+         * adjust the lighting too, so there is a case for showing the panel
+         * there — but _LOWER and _RAISE are held constantly during ordinary
+         * typing, and the starfield would spend most of its life replaced.
+         */
+        if (get_highest_layer(layer_state | default_layer_state) == _ADJUST) {
+            render_config();
+        } else {
+            render_starfield();
+        }
         return;
     }
 

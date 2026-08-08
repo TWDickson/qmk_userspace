@@ -60,6 +60,32 @@
 #define RGB_MATRIX_SAT_STEP 8
 #define RGB_MATRIX_VAL_STEP 8
 
+/* ── The board's stock animations ─────────────────────────────────────────
+ * boardsource/lulu's info.json compiles six, and this keymap now uses one.
+ *
+ * The generated info_config.h is included *before* a keymap's config.h, which
+ * is what makes undefining them here work at all and why no post_config.h (and
+ * so no users/ directory) is needed. Each one costs its effect function plus an
+ * entry in the mode table.
+ *
+ * ALPHAS_MODS is the survivor, and it earns it: LED_FLAG_MODIFIER on this board
+ * is exactly the outer pinky column plus the four thumbs — the eight keys a
+ * half that carry the red Escape, the blue LOWER and the peach RAISE caps. Its
+ * geometry is a fact about the hardware. The five below are functions of x, y
+ * or time and know nothing about a keyboard, which is why what replaced them
+ * lives in rgb_theme.c instead.
+ *
+ * Note these are undefines of someone else's defines: if a future QMK renames
+ * one, this goes quiet rather than failing, and the effect comes back. The
+ * check is that RGB_MATRIX_EFFECT_MAX stays at three (NONE, SOLID_COLOR,
+ * ALPHAS_MODS) — or just that the flash figure does not jump.
+ */
+#undef ENABLE_RGB_MATRIX_GRADIENT_UP_DOWN
+#undef ENABLE_RGB_MATRIX_GRADIENT_LEFT_RIGHT
+#undef ENABLE_RGB_MATRIX_BREATHING
+#undef ENABLE_RGB_MATRIX_BAND_SAT
+#undef ENABLE_RGB_MATRIX_BAND_VAL
+
 /* ── Reactive effects ─────────────────────────────────────────────────────
  * RGB_MATRIX_KEYPRESSES is the whole of it. It defines
  * RGB_MATRIX_KEYREACTIVE_ENABLED, which is what brings g_last_hit_tracker into

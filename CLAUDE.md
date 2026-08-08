@@ -121,11 +121,48 @@ plugging the cable in.
   `knob_sat` is *brighter* than a high one because the material supplies the
   colour. Do not give a theme a cool `knob_hue`.
 
-- **`speed` is not a rate in any theme.** `ALPHAS_MODS` reads it as the alpha/mod
-  hue offset, both gradients as a hue *span*, and a splash theme as the ripple
-  rate. Two themes were previously tuned as though it were a rate and were
-  visibly wrong for it (a green fringe on Rose, a chartreuse thumb row on Ember).
-  Check the effect's source before touching a theme's speed.
+- **`speed` is never a rate.** `ALPHAS_MODS` reads it as the alpha/mod hue
+  offset, `DECK_MIRROR` as a hue span, `DECK_ZONES` as a hue step; only
+  `DECK_PULSE` treats it as a rate. Two themes were previously tuned as though it
+  were one and were visibly wrong for it (a green fringe on Rose, a chartreuse
+  thumb row on the since-deleted Ember). Check the renderer before touching it.
+
+- **Five of the board's six stock animations are `#undef`'d in the keymap's
+  `config.h`, and there is a `_Static_assert` guarding it.** That works without a
+  `post_config.h` (and so without a `users/` directory) because the generated
+  `info_config.h` is included *before* a keymap's `config.h`. An `#undef` of
+  someone else's `#define` fails quiet, so `RGB_MATRIX_EFFECT_MAX == 3` is the
+  tripwire — NONE, SOLID_COLOR, ALPHAS_MODS. If it fires, check the
+  `ENABLE_RGB_MATRIX_*` spellings against the current QMK before touching the
+  number.
+
+- **`ALPHAS_MODS` is kept deliberately and is the only stock effect left.**
+  `LED_FLAG_MODIFIER` on this board is exactly the outer pinky column plus the
+  four thumbs — the eight keys a half carrying the red Escape, the blue LOWER and
+  the peach RAISE caps. Its geometry is a fact about the hardware. Everything
+  else was a function of x, y or time; the deck renderers in `rgb_theme.c`
+  replaced them.
+
+- **A theme seeds the lighting; it does not own it.** `theme_apply()` uses the
+  EEPROM setters and `rgb_theme_init()` deliberately does *not* call it, so
+  `RM_HUEU`/`RM_SATD`/`RM_SPDU` adjust from the theme's starting point and
+  survive a reboot. Re-applying the table at boot is what made those knobs
+  appear to work and then silently discard everything. The deck renderers read
+  the *live* hue/sat/speed for the same reason — reading the table repaints over
+  every adjustment.
+
+- **Brightness must not be read live in `theme_apply()`.**
+  `last_matrix_activity_trigger()` runs *after* `matrix_task()`, so when
+  `process_record` dispatches `THEME_NEXT` the idle clock still reads what it did
+  before the keypress. A theme change mid-fade would persist a half-dimmed board
+  as a preference. Use `rgb_theme_user_val()`.
+
+- **Theme names are capped at five glyphs.** The `_ADJUST` config panel is 32 px
+  across and the font advances 6, so a sixth glyph clips. Same ceiling as the
+  shift gate's layer names, and the reason `DECK_MIRROR`'s theme is called Fold.
+  The font is **A-Z only** — `draw_text()` indexes it with `c - 'A'`, so a digit
+  or symbol reads off the end of the table rather than printing. That is why the
+  panel's four knobs are bars.
 - **`_RAISE`'s `ED_*` editing keys are Ctrl-based on purpose.** They are not
   missing a macOS variant. `keymap_common.c` runs `QK_MODS` keycodes through
   `mod_config()`, which is where `CG_TOGG`'s swap happens, so `LCTL(KC_C)`

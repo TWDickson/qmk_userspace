@@ -16,3 +16,7 @@ bool rgb_theme_process_record(uint16_t keycode, keyrecord_t *record);
  * persist mid-fade; see the comment on the definition.
  */
 uint8_t rgb_theme_user_val(void);
+
+// The current theme's name, uppercase, five glyphs at most — for the _ADJUST
+// config panel, which is 32 px across.
+const char *rgb_theme_name(void);

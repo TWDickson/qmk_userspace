@@ -187,15 +187,26 @@ board — animation, hue, saturation — plus the palette its indicators draw fr
 so that layer and Caps Word feedback lands in a colour that belongs with the
 base instead of clashing with it. `THEME_NEXT` on `_ADJUST` cycles them.
 
-| theme | mode | deck | underglow |
+| theme | drawn by | deck | underglow |
 | --- | --- | --- | --- |
-| Lulu *(default)* | `SOLID_COLOR` + ripples | lit amber, overlapping rings out from each keystroke | hot amber |
+| Lulu *(default)* | **us** | lit amber, overlapping rings out from each keystroke | hot amber |
 | Rose | `ALPHAS_MODS` | rose alphas, red mods — what this board booted into before any of this | rose |
-| Deep | `SOLID_COLOR` + ripples | lit blue, one ring at a time | cyan-blue |
-| Ember | `GRADIENT_UP_DOWN` | deep red at the number row easing to amber under the thumbs | deep red |
 | Mono | `ALPHAS_MODS` | warm white alphas, cool white mods | white |
-| Split | `GRADIENT_LEFT_RIGHT` | one gradient across both halves — blue left hand, violet-rose right | violet |
-| Sweep | `BAND_SAT` | pale deck at full brightness, saturated teal band travelling across it | teal |
+| Mirror | **us** | hue ramps outward from each half's inner edge, both hands identical | violet |
+| Zones | **us** | colour by finger — pinky, ring+middle, index, thumbs. Dead still | teal |
+| Trail | **us** | each key flares on the strike and decays back to the deck | violet |
+| Pulse | **us** | deck held flat; the *outline* breathes | cyan |
+
+Five of the seven are drawn by `rgb_theme.c` rather than by a stock animation,
+because the stock ones are all functions of x, y or time and none of them knows
+what a keyboard is. `ALPHAS_MODS` is the exception and is kept for it — see
+[below](#the-one-stock-effect-that-knows-what-a-keyboard-is).
+
+Four themes were cut getting here: **Deep** (a quieter reactive theme, which
+Trail does better), **Ember** (`GRADIENT_UP_DOWN` quantises to `y >> 4`, and on
+a five-row board that is five flat stripes rather than a gradient), **Split**
+(`GRADIENT_LEFT_RIGHT` is structurally asymmetric — see Mirror) and **Sweep**
+(`BAND_SAT`, which never stops moving on a board you are trying to type on).
 
 ### What the light actually lands on
 
@@ -258,13 +269,11 @@ v = scale8(ripple, hsv.v);        // upstream
 
 which is also why the flare still peaks at full with the brightness dialled right
 down for a dark room. The ripple maths is upstream's, unchanged. `SPLASH_ONE`
-ripples from the newest hit only, so each keystroke cancels the last ring;
 `SPLASH_ALL` ripples from every live hit and lets a fast line overlap its own.
-All is the default theme's, one is Deep's.
 
-Inverting it this way costs **12 bytes of flash net**, because dropping
+Inverting it this way costs nothing, because dropping
 `ENABLE_RGB_MATRIX_SOLID_SPLASH` and `ENABLE_RGB_MATRIX_SOLID_MULTISPLASH` also
-drops their code, and pays for two extra themes besides.
+drops their code. It is the pattern the other three custom decks then reused.
 
 ### Reactive lighting still needs two things the board does not enable
 
@@ -290,45 +299,106 @@ hue of the deck it is drawn on is invisible — "Lulu" used to accent `_RAISE` a
 warm-decked themes therefore give the cap match up and take all-cool accents,
 and "Deep" gives `_LOWER` up to magenta because its deck has taken the blue.
 
-`speed` is not a rate in any theme here — every mode in the table reads it as
-something else, which is the first thing to check when a theme looks wrong:
+`speed` is never a rate — nothing in the table reads it as one, which is the
+first thing to check when a theme looks wrong:
 
-| mode | what `speed` means |
+| deck | what `speed` means |
 | --- | --- |
 | `ALPHAS_MODS` | hue offset applied to `LED_FLAG_MODIFIER` LEDs |
-| `GRADIENT_UP_DOWN` | hue **span** top row → thumbs, `scale8(64, speed) * 4` |
-| `GRADIENT_LEFT_RIGHT` | hue **span** across both halves, `scale8(64, speed) * 224 >> 5` |
-| `BAND_SAT` | sweep rate (the one genuine rate) |
-| `SOLID_COLOR` + ripples | ripple rate, read by `splash_overlay()`; core ignores it |
+| `DECK_MIRROR` | hue **span** from the inner edge out to the pinkies |
+| `DECK_ZONES` | hue **step** between finger groups |
+| `DECK_SPLASH` | ripple rate |
+| `DECK_TRAIL` | decay rate |
+| `DECK_PULSE` | breathing rate (the one genuine rate) |
 
-Two of those were being read as rates and were wrong for it. "Rose" ran
-`ALPHAS_MODS` at 128, putting its mods 112 hue from its alphas — a green fringe
-on a rose board; it is 20 now, which wraps 240 to 4 and puts red under the red
-`Escape`. "Ember" ran `GRADIENT_UP_DOWN` at 64, a span of 64 that landed the
-thumb row on hue 72 — a chartreuse bottom edge on the theme whose entire idea is
-that everything is warm; it is 28 now, 4 → 32.
+Two themes were tuned as though it were a rate and were visibly wrong for it.
+"Rose" ran `ALPHAS_MODS` at 128, putting its mods 112 hue from its alphas — a
+green fringe on a rose board; it is 20 now, which wraps 240 to 4 and puts red
+under the red `Escape`. The since-deleted "Ember" ran `GRADIENT_UP_DOWN` at 64,
+a span of 64 that landed the thumb row on hue 72: a chartreuse bottom edge on
+the theme whose entire idea was that everything is warm.
 
-On this board `LED_FLAG_MODIFIER` is exactly the outer pinky column plus all
-four thumbs: the eight keys a half that carry the coloured caps. That is what
-makes `ALPHAS_MODS` worth two of the seven themes.
+### The one stock effect that knows what a keyboard is
 
-The board's own `info.json` compiles six animations. Four of them —
-`GRADIENT_LEFT_RIGHT`, `BREATHING`, `BAND_SAT`, `BAND_VAL` — went unused for a
-long time, i.e. paid for in flash and not spent. "Split" and "Sweep" are built
-on two of them for nothing. `BREATHING` and `BAND_VAL` stay unused on purpose:
-both band *value* and take the deck to black at the trough, which is the one
-thing every theme here exists to avoid. `BAND_SAT` bands saturation and leaves
-value alone, which is why "Sweep" can move without ever going dark.
+The board's `info.json` compiles six animations. Five of them are `#undef`'d in
+the keymap's `config.h`, which works — and needs no `post_config.h`, and so no
+`users/` directory — because the generated `info_config.h` is included *before*
+a keymap's `config.h`.
+
+`ALPHAS_MODS` is the survivor. On this board `LED_FLAG_MODIFIER` is exactly the
+outer pinky column plus all four thumbs: the eight keys a half that carry the
+red `Escape`, the blue `LOWER` and the peach `RAISE` caps. Its geometry is a
+fact about the hardware. The five that went are functions of x, y or time and
+know nothing about a keyboard, which is why what replaced them is in
+`rgb_theme.c` instead.
+
+Undefining someone else's define fails quiet — rename one upstream and the
+effect comes back with nothing to notice — so `rgb_theme.c` carries the
+tripwire:
+
+```c
+_Static_assert(RGB_MATRIX_EFFECT_MAX == 3, "an unused stock animation is being compiled in again");
+```
+
+`NONE`, `SOLID_COLOR` and `ALPHAS_MODS` is the whole mode table. Deleting one
+`#undef` fires it, which is how it was checked.
+
+### The deck renderers
+
+Five themes draw their own deck, on a `SOLID_COLOR` base coat, in the same
+indicator hook the ripples already used. Each reads the **live** hue, saturation
+and speed rather than the theme's, so the knobs keep working; reading the table
+instead is what made the reactive decks repaint over every adjustment.
+
+- **`DECK_MIRROR`** folds the LED x axis about the gap and ramps hue outward
+  from each half's inner edge, so both hands are identical.
+  `GRADIENT_LEFT_RIGHT` structurally cannot: its x runs monotonically 0–224
+  across the pair, nothing folds it, and the two hands always end on different
+  hues. The fold is the entire difference and it is one line.
+- **`DECK_ZONES`** colours by finger — pinky and its outer reach, ring and
+  middle, index and its stretch, then the thumbs. The grouping comes off the
+  *matrix column*, walked once at init into a 70-byte table, because the LED map
+  only knows where a diode is and not which finger reaches it. Nothing stock
+  comes close; every built-in effect is a function of x, y or time.
+- **`DECK_TRAIL`** flares the struck key and decays it back to the resting deck.
+  It walks the *hits* rather than the LEDs — at most `LED_HITS_TO_REMEMBER` of
+  them, each naming its LED — so it is a handful of iterations a frame against
+  the splash's 58. `TYPING_HEATMAP` is the nearest stock equivalent and is wrong
+  three ways: a hard-coded blue-to-red ramp that ignores the theme hue, a
+  framebuffer in RAM, and it rests at black.
+- **`DECK_PULSE`** holds the deck flat and breathes the *underglow*. Only
+  possible because the underglow is already overwritten every frame, so the two
+  groups can be driven independently — no stock effect can move one and not the
+  other, and `BREATHING` takes the deck to black at the trough along with it.
 
 QMK hue is 0-255 across the whole wheel, not 0-360: `hsv_to_rgb()` picks its
 sextant with `h * 6 / 255`, so 0 is red, 85 green, 170 blue, 213 magenta.
 **240 is rose**, which is what the board has actually been lighting up as.
 
-**Only the theme index is persisted.** Everything else is re-derived from it at
-boot with the `_noeeprom` setters, which keeps the EEPROM write budget for the
-one byte that matters. Brightness is deliberately *not* part of a theme — it is
-a room-lighting preference, not a palette choice — so `RM_VALU`/`RM_VALD` still
-own it and it survives a theme change.
+**A theme seeds the lighting; it does not own it.** `THEME_NEXT` writes its
+hue, saturation, speed and mode into rgb_matrix's own EEPROM and boot restores
+whatever is there, so `RM_HUEU`, `RM_SATD` and `RM_SPDU` adjust from the theme's
+starting point and the board comes back up looking like the version you dialled
+in. This used to be the other way round — the index was the single persisted
+byte and `rgb_theme_init()` re-applied the table with the `_noeeprom` setters at
+every boot, which meant every adjustment was silently discarded on the next
+power cycle: knobs that appeared to work and did not. The write budget is
+unaffected; the writes happen in the same places.
+
+The index still matters at boot, because it selects the indicator palette —
+accents, underglow, knobs and Caps Word are not adjustable from the board, so
+the table remains their only source. Reflashing with a reordered `themes[]` can
+therefore leave the old deck under the new accents; one press of `THEME_NEXT`
+resyncs it.
+
+Brightness is deliberately *not* part of a theme — it is a room-lighting
+preference, not a palette choice — so `RM_VALU`/`RM_VALD` own it alone and it
+survives a theme change. It is also the one value `theme_apply()` must not read
+live: `last_matrix_activity_trigger()` runs *after* `matrix_task()`, so when
+`process_record` dispatches `THEME_NEXT` the idle clock still reads what it did
+before the keypress, and a theme change mid-fade would persist a half-dimmed
+board as if it were a preference. `rgb_theme_user_val()` takes the ramp back
+out.
 
 Indicators, all scaled by the live value so they dim out with the idle ramp
 rather than sitting at full brightness on a sleeping board:
@@ -381,6 +451,56 @@ in *screen* coordinates and transposed on blit, mapping `screen (sx, sy)` to
 `buffer (x = 127 - sy, y = sx)` so that one glyph column becomes one bit spread
 across eight bytes. Confirmed right way up on hardware. **Any future text on
 these panels has to do the same.**
+
+All three renderers share **one** 512-byte framebuffer. They are mutually
+exclusive by construction — the starfield and the config panel are both
+master-only and pick between themselves on the layer, the gate is the
+secondary's — so the separate statics they used to have were never live at once.
+
+### The master panel becomes a config readout on `_ADJUST`
+
+Holding both thumbs swaps the starfield for the state that layer changes, none
+of which shows up anywhere else on the board:
+
+```
+   THEME
+ ▉ LULU  ▉      inverted, the way the gate marks a selection
+ ──────────
+   HUE
+   ▓▓▓░░░░░
+   SAT
+   ▓▓▓▓▓▓▓▓
+   VAL
+   ▓▓▓▓▓░░░
+   SPD
+   ▓▓▓░░░░░
+ ──────────
+    MAC         CG_TOGG: which machine the keymap thinks it is on
+    BASE        BASE or GAME
+```
+
+A theme has a name only in the source otherwise, and `CG_TOGG`'s setting is
+invisible until you press a key and get the wrong modifier — which is the single
+most useful line on the panel.
+
+The four knobs are **bars, not numbers**, for two reasons. The font is A-Z with
+no digits and `draw_text()` indexes it with `c - 'A'`, so a digit would read off
+the end of the table rather than print. And while you are actually turning a
+knob, a level you can watch move beats three characters you have to stop and
+read.
+
+`VAL` is `rgb_theme_user_val()` and not `rgb_matrix_get_val()`: a brightness bar
+that slid to empty while the idle ramp dimmed the board would be reporting the
+ramp rather than the setting.
+
+Theme names are capped at **five glyphs** — the panel is 32 px across and the
+font advances 6, so a sixth clips rather than wraps. That is the same ceiling
+the gate's layer names hit, and it is why `DECK_MIRROR`'s theme is called Fold.
+
+`_ADJUST` only, not every thumb layer. The knobs on `_LOWER` and `_RAISE` adjust
+the lighting too, so there is a case for showing it there — but those two are
+held constantly while typing, and the starfield would spend most of its life
+replaced.
 
 ### The secondary panel is a shift gate
 
