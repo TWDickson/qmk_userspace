@@ -187,48 +187,90 @@ board — animation, hue, saturation — plus the palette its indicators draw fr
 so that layer and Caps Word feedback lands in a colour that belongs with the
 base instead of clashing with it. `THEME_NEXT` on `_ADJUST` cycles them.
 
-| theme | deck | underglow |
-| --- | --- | --- |
-| Lulu *(default)* | lit amber, overlapping ripples out from each keystroke | amber, matching the underside |
-| Rose | hue 240 static — what this board booted into before any of this | rose |
-| Deep | lit blue, one ripple at a time | deeper blue |
-| Ember | slow warm gradient, all-cool accents so they cannot sink into it | amber |
-| Mono | flat white | white — the amber underside tints it in hardware |
+| theme | mode | deck | underglow |
+| --- | --- | --- | --- |
+| Lulu *(default)* | `SOLID_COLOR` + ripples | lit amber, overlapping rings out from each keystroke | hot amber |
+| Rose | `ALPHAS_MODS` | rose alphas, red mods — what this board booted into before any of this | rose |
+| Deep | `SOLID_COLOR` + ripples | lit blue, one ring at a time | cyan-blue |
+| Ember | `GRADIENT_UP_DOWN` | deep red at the number row easing to amber under the thumbs | deep red |
+| Mono | `ALPHAS_MODS` | warm white alphas, cool white mods | white |
+| Split | `GRADIENT_LEFT_RIGHT` | one gradient across both halves — blue left hand, violet-rose right | violet |
+| Sweep | `BAND_SAT` | pale deck at full brightness, saturated teal band travelling across it | teal |
 
-### Every theme rests lit
+### What the light actually lands on
 
-The caps are **solid grey, not shine-through**, over a **black metal case**, so
-the per-key LEDs light the plate *around* each cap rather than a legend on it.
-Against black that wants saturation — a desaturated deck reads as dirty grey.
+Three surfaces, and every theme is built out of the difference between them.
 
-The reactive themes get their ripple *on top of* a lit deck rather than instead
-of one, because both splash effects add to the resting value:
+The **deck** (`LED_FLAG_KEYLIGHT`, five columns a half) lights a **charcoal
+plate** between **opaque greige keycaps**. It is a low-contrast wash —
+atmosphere and a rough "where is the board", not illumination. Desaturated
+colours read as lit grey and vanish, so the deck wants saturation.
+
+The **underglow** (`LED_FLAG_UNDERGLOW`, six a half) washes nothing. It escapes
+as a thin line between plate and **black** bottom case and reads as a crisp neon
+outline against the desk — by a distance the most visible thing on the board.
+
+> An earlier version of this file said the underglow lights an "amber
+> underside… a fixed colour nothing in firmware can change", and built a
+> warm-underglow-only rule on it. **There is nothing amber on this board except
+> the encoder knobs.** Being an outline against black rather than a wash over
+> amber, the underglow takes any hue cleanly — cool underglow does not go muddy,
+> it goes neon. "Deep", "Split" and "Sweep" are all built on that.
+
+The **encoder knobs** are translucent amber and are the *only* shine-through
+parts on the board — every keycap is opaque, so these two LEDs are the sole
+per-key light seen as light rather than as plate glow. They are held at a fixed
+warm colour instead of being left to the animation, so whatever the deck is
+doing the volume controls are lit: the one control you reach for without looking.
+The amber body multiplies whatever it is given — warm hues blaze, cool hues go
+dead brown — so `knob_hue` stays warm in every theme, and a *low* `knob_sat` is
+brighter than a high one because the material supplies the colour.
+
+### Every theme rests lit — and no stock reactive effect does
+
+This is the load-bearing one, and the firmware used to have it backwards.
+
+`SOLID_SPLASH` and `SOLID_MULTISPLASH` do **not** add their flare to the resting
+deck. Their runner opens each LED with
 
 ```c
-hsv.v = qadd8(hsv.v, 255 - effect);   // solid_splash_anim.h
+hsv_t hsv = rgb_matrix_config.hsv;
+hsv.v     = 0;                      // effect_runner_reactive_splash()
 ```
 
-The flare peaks at 255 however low the resting brightness is, so it keeps its
-punch when the board is dialled down for a dark room. `SOLID_REACTIVE_SIMPLE`,
-which used to be the default, *scales* the deck by the strike instead — a board
-that is dark until a key is hit. It looked good against the black case and it
-meant the deck was off exactly when it was not being typed on, which is when
-you want to find a key by looking at it.
+and only then accumulates hits, so the `qadd8(hsv.v, 255 - effect)` inside
+`SOLID_SPLASH_math` adds ripples to *each other*, never to the resting
+brightness. About 1.3 s after the last keystroke — once every front has passed —
+the deck is black. `effect_runner_reactive()`, which drives
+`SOLID_REACTIVE_SIMPLE`, reaches zero the same way via `scale8(255 - offset, v)`
+with `offset` clamped at 255. **The distinction this repo used to draw between
+the two — "splashes add, reactive scales" — does not exist. Both rest dark.**
 
-`SOLID_SPLASH` tracks only the newest hit, so each keystroke cancels the last
-ripple; `SOLID_MULTISPLASH` runs one per entry in the hit buffer and lets a fast
-line overlap its own. Multi is the default theme's, single is Deep's.
+So the reactive themes are `SOLID_COLOR` with the ripples overlaid in the
+indicator hook instead. Core lays the resting deck every frame;
+`splash_overlay()` touches only the LEDs with a live front over them and adds to
+that resting value the way the old comments always claimed:
 
-The underglow lights the **amber underside**, a fixed colour nothing in firmware
-can change. Warm underglow makes it look lit on purpose; cool underglow fights
-it and goes muddy. So the underglow is held at the theme's own colour rather
-than left to the animation, which means an animation only plays across the deck.
+```c
+v = qadd8(resting_val, ripple);   // splash_overlay()
+v = scale8(ripple, hsv.v);        // upstream
+```
 
-### Reactive effects need two things the board does not enable
+which is also why the flare still peaks at full with the brightness dialled right
+down for a dark room. The ripple maths is upstream's, unchanged. `SPLASH_ONE`
+ripples from the newest hit only, so each keystroke cancels the last ring;
+`SPLASH_ALL` ripples from every live hit and lets a fast line overlap its own.
+All is the default theme's, one is Deep's.
 
-`RGB_MATRIX_KEYPRESSES` is what defines `RGB_MATRIX_KEYREACTIVE_ENABLED`;
-without it every reactive effect is compiled out and its name is not even a
-valid mode. It costs a per-key hit buffer in RAM.
+Inverting it this way costs **12 bytes of flash net**, because dropping
+`ENABLE_RGB_MATRIX_SOLID_SPLASH` and `ENABLE_RGB_MATRIX_SOLID_MULTISPLASH` also
+drops their code, and pays for two extra themes besides.
+
+### Reactive lighting still needs two things the board does not enable
+
+`RGB_MATRIX_KEYPRESSES` is what defines `RGB_MATRIX_KEYREACTIVE_ENABLED`, which
+is what brings `g_last_hit_tracker` into existence — the ring of recent key
+positions and ages `splash_overlay()` reads. It costs that buffer in RAM.
 
 `SPLIT_TRANSPORT_MIRROR` is the other half. Only the master runs
 `process_record`, so without the mirror the slave's `last_hit_buffer` stays
@@ -238,16 +280,45 @@ half needed the master's key events — **that reasoning no longer holds.** It
 costs a matrix's worth of link traffic per scan and +100 bytes of flash.
 
 **Accents lean on the keycaps, not the palette.** This board has a blue `LOWER`
-cap, a yellow `RAISE` cap and a red `Escape`, so wherever it stays legible the
+cap, a peach `RAISE` cap and a red `Escape`, so wherever it stays legible the
 lit keys match the cap of the thumb key being held, and Caps Lock red matches
-the Escape. The caps never change, so the meaning of a colour should not either
-— only "Deep" breaks it, because its deck takes the blue and `_LOWER`'s accent
-has to go magenta to stay visible.
+the Escape.
 
-`ALPHAS_MODS` reads `rgb_matrix_config.speed` as the hue offset between alphas
-and mods rather than as a rate, so themes carry a speed to control that split.
-"Lulu" uses a small one for a two-tone warm deck; "Mono" uses zero for a flat
-one.
+*Where it stays legible* is the binding half of that rule. An accent within ~30
+hue of the deck it is drawn on is invisible — "Lulu" used to accent `_RAISE` at
+43 on a deck of 24, which is a yellow layer indicator on an amber board. The
+warm-decked themes therefore give the cap match up and take all-cool accents,
+and "Deep" gives `_LOWER` up to magenta because its deck has taken the blue.
+
+`speed` is not a rate in any theme here — every mode in the table reads it as
+something else, which is the first thing to check when a theme looks wrong:
+
+| mode | what `speed` means |
+| --- | --- |
+| `ALPHAS_MODS` | hue offset applied to `LED_FLAG_MODIFIER` LEDs |
+| `GRADIENT_UP_DOWN` | hue **span** top row → thumbs, `scale8(64, speed) * 4` |
+| `GRADIENT_LEFT_RIGHT` | hue **span** across both halves, `scale8(64, speed) * 224 >> 5` |
+| `BAND_SAT` | sweep rate (the one genuine rate) |
+| `SOLID_COLOR` + ripples | ripple rate, read by `splash_overlay()`; core ignores it |
+
+Two of those were being read as rates and were wrong for it. "Rose" ran
+`ALPHAS_MODS` at 128, putting its mods 112 hue from its alphas — a green fringe
+on a rose board; it is 20 now, which wraps 240 to 4 and puts red under the red
+`Escape`. "Ember" ran `GRADIENT_UP_DOWN` at 64, a span of 64 that landed the
+thumb row on hue 72 — a chartreuse bottom edge on the theme whose entire idea is
+that everything is warm; it is 28 now, 4 → 32.
+
+On this board `LED_FLAG_MODIFIER` is exactly the outer pinky column plus all
+four thumbs: the eight keys a half that carry the coloured caps. That is what
+makes `ALPHAS_MODS` worth two of the seven themes.
+
+The board's own `info.json` compiles six animations. Four of them —
+`GRADIENT_LEFT_RIGHT`, `BREATHING`, `BAND_SAT`, `BAND_VAL` — went unused for a
+long time, i.e. paid for in flash and not spent. "Split" and "Sweep" are built
+on two of them for nothing. `BREATHING` and `BAND_VAL` stay unused on purpose:
+both band *value* and take the deck to black at the trough, which is the one
+thing every theme here exists to avoid. `BAND_SAT` bands saturation and leaves
+value alone, which is why "Sweep" can move without ever going dark.
 
 QMK hue is 0-255 across the whole wheel, not 0-360: `hsv_to_rgb()` picks its
 sextant with `h * 6 / 255`, so 0 is red, 85 green, 170 blue, 213 magenta.
@@ -268,7 +339,16 @@ rather than sitting at full brightness on a sleeping board:
   board, and exactly what is worth pointing at.
 - **`_GAME`** borrows the underglow for its tint. A full-board wash would read
   more clearly but would also mean losing the animation for as long as the game
-  lasts.
+  lasts. Green in every theme, for the same reason Caps Lock is always red: it
+  is a mode you toggle and stay in, and a state that can be left switched on
+  should announce itself in one colour rather than in whatever the palette
+  fancies. It used to be red in two themes and green in the other three, which
+  meant red stood for both "stuck on" and "game".
+- **The encoder knobs** are held at the theme's warm `knob_hue` — drawn *after*
+  the layer indicator, even though `[4,5]` carries `RM_TOGG` on `_ADJUST` and
+  would otherwise be lit by it. An accent hue through an amber knob is a dim
+  brown, and a knob that is the same warm colour on every layer is worth more
+  than one more lit key on a layer that already lights ten.
 - **Caps Lock** is red on the key that toggles it, in every theme. A stuck-on
   state should not be styled.
 - **Caps Word** lights a shift — one shift, see below.

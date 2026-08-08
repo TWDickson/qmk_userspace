@@ -90,17 +90,42 @@ plugging the cable in.
   never fills and that half of the board stays dark while the other flares.
   Removing it does not break the build, it just half-breaks the lighting.
 
-- **Both splash effects add to the resting deck; `SOLID_REACTIVE_SIMPLE` scales
-  it.** `hsv.v = qadd8(hsv.v, 255 - effect)` is why a splash theme is lit at rest
-  *and* ripples, and why the flare still peaks at 255 with the brightness dialled
-  right down. Swapping one for a reactive effect turns the board dark between
-  keystrokes, which is what it used to do and is not wanted.
+- **No stock reactive effect rests lit, and the reactive themes are not reactive
+  effects.** This file used to claim the opposite — that both splashes add their
+  flare to the resting deck and only `SOLID_REACTIVE_SIMPLE` scales it. Untrue:
+  `effect_runner_reactive_splash()` sets `hsv.v = 0` per LED before accumulating,
+  so `qadd8` adds ripples to *each other*, and the deck is black ~1.3 s after the
+  last keystroke. Both families rest dark. The reactive themes are therefore
+  `SOLID_COLOR` with `splash_overlay()` in the indicator hook painting the rings
+  on top, which is what actually delivers a lit deck *and* a ripple. Do not
+  "simplify" it back to `RGB_MATRIX_SOLID_MULTISPLASH`.
 
-- **The underglow is deliberately excluded from the animation.** `rgb_theme.c`
-  overwrites every `LED_FLAG_UNDERGLOW` LED every frame with a flat colour. That
-  is not a bug to optimise away: the underglow lights the amber case rather than
-  the grey caps, and a fixed-colour case reads better under a steady wash than
-  under a gradient crawling beneath it. `_GAME` borrows the same LEDs.
+- **The case is black and the plate is charcoal. Nothing on this board is amber
+  except the two encoder knobs.** An earlier version of this file said the
+  underglow "lights the amber case" and derived a warm-underglow-only rule from
+  it. The underglow does not wash a surface at all — it escapes as a thin line
+  between plate and case and reads as a neon outline against black, so it takes
+  any hue cleanly. Three themes depend on that.
+
+- **The underglow is still deliberately excluded from the animation.**
+  `rgb_theme.c` overwrites every `LED_FLAG_UNDERGLOW` LED every frame with a flat
+  colour. That is not a bug to optimise away — it is the board's outline, and an
+  outline reads better as one steady line than as a gradient crawling around it.
+  `_GAME` borrows the same LEDs.
+
+- **The encoder knobs are the only shine-through parts on the board.** Every
+  keycap is opaque, so LEDs `[4,5]` and `[9,5]` are the sole per-key light seen
+  as light rather than as plate glow. They are held at a fixed warm colour after
+  the layer indicator so they are lit on every layer in every theme. The amber
+  body multiplies its input: warm hues blaze, cool hues go dead brown, and a low
+  `knob_sat` is *brighter* than a high one because the material supplies the
+  colour. Do not give a theme a cool `knob_hue`.
+
+- **`speed` is not a rate in any theme.** `ALPHAS_MODS` reads it as the alpha/mod
+  hue offset, both gradients as a hue *span*, and a splash theme as the ripple
+  rate. Two themes were previously tuned as though it were a rate and were
+  visibly wrong for it (a green fringe on Rose, a chartreuse thumb row on Ember).
+  Check the effect's source before touching a theme's speed.
 - **`_RAISE`'s `ED_*` editing keys are Ctrl-based on purpose.** They are not
   missing a macOS variant. `keymap_common.c` runs `QK_MODS` keycodes through
   `mod_config()`, which is where `CG_TOGG`'s swap happens, so `LCTL(KC_C)`

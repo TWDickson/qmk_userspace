@@ -46,9 +46,14 @@
  * renamed in 2022 and the RGBLIGHT_*_STEP ones only ever applied to rgblight,
  * which this board does not build — both were silently doing nothing.
  */
-#define RGB_MATRIX_DEFAULT_MODE RGB_MATRIX_ALPHAS_MODS
-#define RGB_MATRIX_DEFAULT_HUE 240 // blue
-#define RGB_MATRIX_DEFAULT_SAT 239
+/* These only apply to a never-written or freshly reset EEPROM, since
+ * rgb_theme_init() re-derives mode/hue/sat from the stored theme index at
+ * every boot. They are set to theme 0's values so the two agree and a factory
+ * reset comes up looking like the theme it claims to be on.
+ */
+#define RGB_MATRIX_DEFAULT_MODE RGB_MATRIX_SOLID_COLOR
+#define RGB_MATRIX_DEFAULT_HUE 24 // amber; hue is 0-255, so 240 is rose, not blue
+#define RGB_MATRIX_DEFAULT_SAT 255
 #define RGB_MATRIX_DEFAULT_VAL 150 // also the board's max_brightness
 
 #define RGB_MATRIX_HUE_STEP 8
@@ -56,37 +61,22 @@
 #define RGB_MATRIX_VAL_STEP 8
 
 /* ── Reactive effects ─────────────────────────────────────────────────────
- * The board's info.json enables six animations, all of which run regardless of
- * what anyone is doing. These two respond to typing instead, which is the only
- * kind of movement on a keyboard that means anything.
+ * RGB_MATRIX_KEYPRESSES is the whole of it. It defines
+ * RGB_MATRIX_KEYREACTIVE_ENABLED, which is what brings g_last_hit_tracker into
+ * existence — the ring of recent key positions and ages that splash_overlay()
+ * in rgb_theme.c reads to draw its ripples. It costs that buffer in RAM, which
+ * is why it is not on by default.
  *
- * RGB_MATRIX_KEYPRESSES is what defines RGB_MATRIX_KEYREACTIVE_ENABLED, and
- * every reactive effect is compiled out without it. It also costs a per-key
- * hit buffer in RAM, which is why it is not on by default.
- *
- * Both splashes ADD to the resting deck rather than replacing it —
- *
- *     hsv.v = qadd8(hsv.v, 255 - effect)      solid_splash_anim.h
- *
- * — so the board stays lit at the theme's own colour and a keystroke sends a
- * ring out from under the cap that was struck, peaking at 255 no matter how low
- * the resting brightness is set. That is what gives a lit deck and a ripple at
- * the same time, and it is why the flare keeps its punch when the value is
- * dialled down for a dark room.
- *
- * The difference between them: SOLID_SPLASH tracks only the newest hit, so a
- * ripple is cancelled by the next keystroke; SOLID_MULTISPLASH runs one per
- * entry in the hit buffer, so fast typing overlaps them. Multi is the default
- * theme's, single is "Deep"'s.
- *
- * SOLID_REACTIVE_SIMPLE, which used to be here, is the opposite trade: it
- * *scales* the deck by the strike instead of adding to it, leaving the board
- * dark until a key is hit. It looked good against the black case but it meant
- * the deck was off whenever the hands were.
+ * No ENABLE_RGB_MATRIX_*_SPLASH here, deliberately. This used to compile
+ * SOLID_SPLASH and SOLID_MULTISPLASH and select them as theme modes, on the
+ * belief that they add their flare to the resting deck. They do not: their
+ * runner zeroes hsv.v per LED before accumulating, so both rest at black about
+ * a second after the last keystroke, which is exactly the behaviour every
+ * theme here exists to avoid. The reactive themes are SOLID_COLOR with the
+ * ripples overlaid in the indicator hook instead — see splash_overlay(), which
+ * carries the full account. Dropping the two effects also drops their code.
  */
 #define RGB_MATRIX_KEYPRESSES
-#define ENABLE_RGB_MATRIX_SOLID_SPLASH
-#define ENABLE_RGB_MATRIX_SOLID_MULTISPLASH
 
 /* ── USB identity ─────────────────────────────────────────────────────────
  * On ChibiOS, SERIAL_NUMBER_USE_HARDWARE_ID defaults to TRUE, so the USB
