@@ -266,9 +266,14 @@ tap_dance_action_t tap_dance_actions[] = {
     [TD_MEDIA] = ACTION_TAP_DANCE_FN(media_tap),
 };
 
+/* Only the media dance wants a longer window. Everything else — the pinky
+ * shifts especially — keeps the term config.h sets.
+ *
+ * This is dead code without TAPPING_TERM_PER_KEY in config.h: GET_TAPPING_TERM
+ * expands to the bare TAPPING_TERM otherwise and nothing ever calls this, with
+ * no warning to say so. See the note there.
+ */
 uint16_t get_tapping_term(uint16_t keycode, keyrecord_t *record) {
-    // Only the media dance wants a longer window. Everything else — the pinky
-    // shifts especially — keeps the term config.h sets.
     return keycode == TD(TD_MEDIA) ? MEDIA_TAP_TERM : TAPPING_TERM;
 }
 

@@ -219,6 +219,15 @@ spelling against the QMK source before trusting any lighting or tap-hold knob:
   sextant with `h * 6 / 255`, so **240 is rose, not blue** — blue is ~170. The
   `RGB_MATRIX_DEFAULT_HUE 240 // blue` comment was wrong about what the board
   actually lights up as.
+- **A `get_*` hook is inert until its `*_PER_KEY` define is set.**
+  `GET_TAPPING_TERM` in `quantum/action_tapping.h` expands to the literal
+  `TAPPING_TERM` unless `TAPPING_TERM_PER_KEY` is defined, and defining an
+  unused non-static function is not a warning — so `get_tapping_term()` sat in
+  `keymap.c` compiling cleanly and never being called, and the media tap dance
+  ran on the 200 ms term rather than its own 300 ms one. Same shape applies to
+  `QUICK_TAP_TERM_PER_KEY`, `PERMISSIVE_HOLD_PER_KEY` and the rest. This QMK has
+  no `custom_tapping_term` field on `tap_dance_action_t`, so the define is the
+  only route.
 
 **Verify a new define actually took effect** rather than assuming: delete it,
 rebuild, and compare `arm-none-eabi-size` on

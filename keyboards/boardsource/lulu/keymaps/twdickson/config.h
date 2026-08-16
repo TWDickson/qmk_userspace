@@ -182,3 +182,13 @@
 #define PERMISSIVE_HOLD
 #define QUICK_TAP_TERM 0
 #define SPECULATIVE_HOLD
+
+/* Required, or keymap.c's get_tapping_term() is never called. GET_TAPPING_TERM
+ * in quantum/action_tapping.h expands to the literal TAPPING_TERM unless this
+ * is set, and an unused non-static function is not a warning — so the media
+ * dance silently ran on the 200 ms term instead of its own 300 ms one, which is
+ * far too tight to land a double or triple click on an encoder push. This is
+ * one of the defines that does nothing on its own; the tripwire is that the
+ * behaviour changes, and the ELF grows.
+ */
+#define TAPPING_TERM_PER_KEY
