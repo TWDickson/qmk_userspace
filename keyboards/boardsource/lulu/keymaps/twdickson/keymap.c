@@ -101,7 +101,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
  * |------+------+------+------+------+------|                    |------+------+------+------+------+------|
  * |      |      |      |      |      |      |                    |      |      |  Up  |      |      | F12  |
  * |------+------+------+------+------+------|                    |------+------+------+------+------+------|
- * |CapsWd|      |      |      |      |      |-------.    ,-------|      | Left | Down | Right|      |      |
+ * |      |      |      |      |      |      |-------.    ,-------|      | Left | Down | Right|      |      |
  * |------+------+------+------+------+------|       |    |       |------+------+------+------+------+------|
  * |      |      |      |      |      |      |-------|    |-------|      |      |      |      |  \   |      |
  * `-----------------------------------------/       /     \      \-----------------------------------------'
@@ -113,13 +113,15 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
  * gives "~", and on macOS GUI+grave cycles windows. This is the only bare
  * backtick on the board. Do not "clean it up".
  *
- * CW_TOGG sits on the same physical key that carries Caps Lock on _ADJUST, one
- * layer down, because it is the one you actually reach for mid-word.
+ * The left pinky is deliberately transparent, which resolves to _QWERTY's
+ * KC_LCTL. That is the whole point of this layer's arrow cluster: Ctrl+arrow
+ * (Cmd+arrow after CG_TOGG) is word-wise motion, and it needs the modifier and
+ * the arrows reachable at once. Putting anything on that key takes it back.
  */
 [_LOWER] = LAYOUT(
   KC_GRV,  KC_F1,   KC_F2,   KC_F3,   KC_F4,   KC_F5,                       KC_F6,   KC_F7,   KC_F8,   KC_F9,   KC_F10,  KC_F11,
   _______, _______, _______, _______, _______, _______,                     _______, _______, KC_UP,   _______, _______, KC_F12,
-  CW_TOGG, _______, _______, _______, _______, _______,                     _______, KC_LEFT, KC_DOWN, KC_RGHT, _______, _______,
+  _______, _______, _______, _______, _______, _______,                     _______, KC_LEFT, KC_DOWN, KC_RGHT, _______, _______,
   _______, _______, _______, _______, _______, _______, _______,   _______, _______, _______, _______, _______, KC_BSLS, _______,
                              _______, _______, _______, _______,   _______, _______, KC_DEL,  _______
 ),
@@ -130,7 +132,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
  * |------+------+------+------+------+------|                    |------+------+------+------+------+------|
  * |      |      |      |      |      |      |                    |      |      | PgUp |      |PrtScn|      |
  * |------+------+------+------+------+------|                    |------+------+------+------+------+------|
- * |      |SelAll| Save |      | Find | FndNx|-------.    ,-------|      | Home | PgDn | End  |      |      |
+ * |CapsWd|SelAll| Save |      | Find | FndNx|-------.    ,-------|      | Home | PgDn | End  |      |      |
  * |------+------+------+------+------+------| Prev  |    | Next  |------+------+------+------+------+------|
  * |      | Undo | Cut  | Copy | Paste| Redo |-------|    |-------|      |      |      |      |      |      |
  * `-----------------------------------------/       /     \      \-----------------------------------------'
@@ -151,11 +153,18 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
  * and window-manager shortcuts that cannot collide with anything.
  *
  * Ins mirrors _LOWER's Del on the same thumb.
+ *
+ * CW_TOGG sits on the same physical key that carries Caps Lock on _ADJUST, one
+ * layer down, because it is the one you actually reach for mid-word. It is here
+ * rather than on _LOWER because _LOWER's pinky has to stay transparent to keep
+ * Ctrl under the arrows. The cost is that Ctrl is not held-able on _RAISE, so
+ * Ctrl+Home / Ctrl+End are gone; the left hand's ED_* keys build their own Ctrl
+ * and are unaffected.
  */
 [_RAISE] = LAYOUT(
   KC_F13,  KC_F14,  KC_F15,  KC_F16,  KC_F17,  KC_F18,                      KC_F19,  KC_F20,  KC_F21,  KC_F22,  KC_F23,  KC_F24,
   _______, _______, _______, _______, _______, _______,                     _______, _______, KC_PGUP, _______, KC_PSCR, _______,
-  _______, ED_SALL, ED_SAVE, _______, ED_FIND, ED_FNXT,                     _______, KC_HOME, KC_PGDN, KC_END,  _______, _______,
+  CW_TOGG, ED_SALL, ED_SAVE, _______, ED_FIND, ED_FNXT,                     _______, KC_HOME, KC_PGDN, KC_END,  _______, _______,
   _______, ED_UNDO, ED_CUT,  ED_COPY, ED_PSTE, ED_REDO, KC_MPRV,   KC_MNXT, _______, _______, _______, _______, _______, _______,
                              _______, _______, _______, _______,   _______, _______, KC_INS,  _______
 ),

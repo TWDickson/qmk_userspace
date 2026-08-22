@@ -14,8 +14,8 @@ tend to be phrased as "this used to be X, and here is why X was untrue."
 | --- | --- | --- |
 | `_QWERTY` | default | the alphas, number row, pinky mod-tap shifts, media |
 | `_GAME` | `GAME_TOGGLE`, persisted | three overrides; everything else falls through |
-| `_LOWER` | left thumb | F1-F12, arrows, backtick, Caps Word, Del |
-| `_RAISE` | right thumb | F13-F24, navigation, editing actions, media, Ins |
+| `_LOWER` | left thumb | F1-F12, arrows, backtick, Del |
+| `_RAISE` | right thumb | F13-F24, navigation, editing actions, media, Caps Word, Ins |
 | `_ADJUST` | both thumbs (tri-layer) | lighting, themes, mode toggles, Caps Lock, `QK_BOOT`, Ctrl+Alt+Del |
 
 ### `_GAME` states only what it changes
@@ -121,9 +121,17 @@ left off, since those would cost `~` and macOS's Cmd+`` ` `` window cycling.
 
 ### Caps Word
 
-`CW_TOGG` on `_LOWER`, on the same physical key that carries Caps Lock on
-`_ADJUST` — one layer down, because unlike Caps Lock it is something you reach
+`CW_TOGG` on `_RAISE`, on the same physical key that carries Caps Lock on
+`_ADJUST` — two layers down, because unlike Caps Lock it is something you reach
 for mid-word.
+
+It lived on `_LOWER` until `_LOWER`'s left pinky was needed for `Ctrl`: the
+arrows are on that layer, and Ctrl+arrow (Cmd+arrow after `CG_TOGG`) is word-wise
+motion, which needs the modifier and the arrows held at the same time. A
+transparent key there resolves to `_QWERTY`'s `KC_LCTL`, so the fix was to take
+`CW_TOGG` off it. The cost is that `Ctrl` is not held-able on `_RAISE` at all,
+which loses Ctrl+Home and Ctrl+End; `_RAISE`'s `ED_*` keys assemble their own
+`Ctrl` from `LCTL(...)` and are unaffected.
 
 Tap it and the next word is capitalised: letters get shift, digits and `-` `_`
 pass through, Backspace still works inside the word, and the first space or

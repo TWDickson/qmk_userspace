@@ -43,8 +43,8 @@ one, move the cable, flash the other. Same file for both.
 | --- | --- | --- |
 | `_QWERTY` | default | alphas, number row, pinky shifts, media |
 | `_GAME` | `GAME_TOGGLE`, persisted | plain shifts, no left GUI |
-| `_LOWER` | left thumb | F1–F12, arrows, backtick, Caps Word, Del |
-| `_RAISE` | right thumb | F13–F24, navigation, editing, Ins |
+| `_LOWER` | left thumb | F1–F12, arrows, backtick, Del |
+| `_RAISE` | right thumb | F13–F24, navigation, editing, Caps Word, Ins |
 | `_ADJUST` | **both** thumbs | lighting, themes, mode toggles, `QK_BOOT` |
 
 ### `_LOWER` — left thumb
@@ -53,9 +53,12 @@ Backtick sits here because `QK_GESC` can't produce one: it only emits grave
 while Shift or GUI is held, and leaves that modifier applied. So Escape is
 unmodified, `~` is Shift+Escape, and a bare `` ` `` is `LOWER`+Escape.
 
-F1–F12 across the top, arrows on the right hand (`IJKL` positions), `Del` on the
-right thumb, and `CW_TOGG` on the `A` key — one layer below where Caps Lock
-lives, because it's the one you reach for mid-word.
+F1–F12 across the top, arrows on the right hand (`IJKL` positions), and `Del` on
+the right thumb.
+
+The left pinky is left transparent on purpose, so it stays `Ctrl` from the base
+layer. Ctrl+arrow — Cmd+arrow once `CG_TOGG` swaps them — is word-wise motion,
+and it only works if the modifier and the arrows are reachable together.
 
 ### `_RAISE` — right thumb
 
@@ -67,6 +70,12 @@ to what it lands on, each on the letter its shortcut already uses:
 | `Z` Undo | `X` Cut | `C` Copy | `V` Paste |
 | `B` Redo | `A` Select All | `S` Save | `F` Find |
 | `G` Find Next | | | |
+
+`CW_TOGG` is on the `A` key — one layer below where Caps Lock lives, because it's
+the one you reach for mid-word. It sits here rather than on `_LOWER` so that
+`_LOWER`'s pinky can stay `Ctrl` for the arrows; the trade is that `Ctrl` can't
+be held on this layer, so no Ctrl+Home / Ctrl+End. The editing keys build their
+own `Ctrl` and don't care.
 
 A right thumb replaces the left pinky reaching for Ctrl, so a same-hand stretch
 becomes a two-hand roll. **These follow the Mac/Windows toggle automatically** —
